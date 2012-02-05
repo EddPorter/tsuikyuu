@@ -3,15 +3,26 @@
   "name": "search",
   "description": "A JavaScript search and planning framework.",
   "version": "0.0.0",
+  "keywords": [
+    "search",
+    "plan",
+    "ai"
+  ],
   "homepage": "https://github.com/EddPorter/search",
   "repository": {
     "type": "git",
     "url": "git://github.com/EddPorter/search.git"
   },
   "engines": {
-    "node": "~0.6.9"
+    "node": ">= 0.6.10"
   },
   "dependencies": {},
   "devDependencies": {},
-  "optionalDependencies": {}
+  "optionalDependencies": {},
+  "directories": {
+    "lib": "lib",
+    "doc": "doc",
+    "test": "test",
+    "example": "example"
+  }
 }
