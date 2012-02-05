@@ -1,33 +1,34 @@
-Search = () -> { }
+Search = () ->
+  return
 
 Search.prototype = {
   remove_choice: null
-  set_remove_choice: (rc) ->
-    this.remove_choice = rc
+
   is_goal: null
-  set_is_goal: (ig) ->
-    this.is_goal = ig
+
   next_actions: null
-  set_next_actions: (na) ->
-    this.next_actions = na
+
   apply_action_to_state: null
-  set_apply_action_to_state: (aats) ->
-    this.apply_action_to_state = aats
+
   search: (initial_state, callback) ->
-    frontier = [ { state: initial_state, action: null } ]
+    frontier = [ [ { state: initial_state, action: null } ] ]
     explored = []
     loop
+      console.log 'New loop. Frontier length: ' + frontier.length
       if frontier.length == 0
         callback false if callback?
         return false
-      path = remove_choice frontier
+      path = this.remove_choice frontier
+      console.log 'Next path choice: ' + require('util').inspect path
       s = path[path.length - 1] # s = path.end
       explored[explored.length] = s # add s to explored
-      if is_goal(s)
+      console.log 'Number of explored states: ' + explored.length
+      if this.is_goal(s)
+        console.log 'Goal state found: ' + require('util').inspect s
         callback true, path if callback?
         return path
-      for a in next_actions(s)
-        result = apply_action_to_state s, a
+      for a in this.next_actions(s)
+        result = this.apply_action_to_state s, a
         if not result in frontier and not result in explored
           new_path = path
           new_path[new_path.length - 1] =
@@ -35,3 +36,5 @@ Search.prototype = {
             action: a
           frontier[frontier.length - 1] = new_path
 }
+
+exports.Search = Search

@@ -17,8 +17,14 @@
     "node": ">= 0.6.10"
   },
   "dependencies": {},
-  "devDependencies": {},
+  "devDependencies": {
+    "nodeunit": ">= 0.6.4"
+  },
   "optionalDependencies": {},
+  "scripts": {
+    "test": "nodeunit test || echo",
+    "preinstall": "coffee -c -b lib/*.coffee"
+  },
   "directories": {
     "lib": "lib",
     "doc": "doc",
