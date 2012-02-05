@@ -1,0 +1,17 @@
+{
+  "author": "Edd Porter <search@eddporter.com> (http://eddporter.com/)",
+  "name": "search",
+  "description": "A JavaScript search and planning framework.",
+  "version": "0.0.0",
+  "homepage": "https://github.com/EddPorter/search",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/EddPorter/search.git"
+  },
+  "engines": {
+    "node": "~0.6.9"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "optionalDependencies": {}
+}
