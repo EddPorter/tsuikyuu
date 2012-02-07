@@ -67,9 +67,16 @@ exports['search'] = nodeunit.testCase {
     test.notEqual this.search.search, null
     test.done()
 
-  'sync_allStatesAreGoal_returnsInitialState': (test) ->
+  'async_testLoopingPath_success': (test) ->
+    this.search.search_loop = (f, e, c) ->
+      console.log 'looping'
+      test.done()
+    this.search.search null, () ->
+      return
+
+  'sync_allStatesAreGoals_returnsInitialState': (test) ->
     this.search.remove_choice = (frontier) ->
-      frontier[0]
+      [frontier[0], frontier[1..]]
     this.search.is_goal = (state) ->
       true
     initial_state =
@@ -80,9 +87,9 @@ exports['search'] = nodeunit.testCase {
     test.equal result[0].state, initial_state
     test.done()
 
-  'async_allStatesAreGoal_returnsInitialState': (test) ->
+  'async_allStatesAreGoals_returnsInitialState': (test) ->
     this.search.remove_choice = (frontier) ->
-      frontier[0]
+      [frontier[0], frontier[1..]]
     this.search.is_goal = (state) ->
       true
     initial_state =
@@ -92,4 +99,45 @@ exports['search'] = nodeunit.testCase {
       test.equal result.length, 1
       test.equal result[0].state, initial_state
       test.done()
+
+  'sync_allButStartStateAreGoals_returnsLengthTwoPath': (test) ->
+    initial_state =
+      data1: 'stuff'
+      data2: 81
+    this.search.remove_choice = (frontier) ->
+      [frontier[0], frontier[1..]]
+    this.search.is_goal = (state) ->
+      console.dir state
+      state != initial_state
+    this.search.next_actions = (state) ->
+      ['up']
+    this.search.apply_action_to_state = (state, action) ->
+      { data1: state.data1, data2: state.data2 + 1 }
+    result = this.search.search initial_state
+    test.equal result.length, 2
+    test.equal result[0].state, initial_state
+    test.notEqual result[1].state, initial_state
+    test.done()
+
+  'async_allButStartStateAreGoals_returnsLengthTwoPath': (test) ->
+    initial_state =
+      data1: 'stuff'
+      data2: 81
+    this.search.remove_choice = (frontier) ->
+      [frontier[0], frontier[1..]]
+    this.search.is_goal = (state) ->
+      console.dir state
+      state != initial_state
+    this.search.next_actions = (state) ->
+      ['up']
+    this.search.apply_action_to_state = (state, action) ->
+      { data1: state.data1, data2: state.data2 + 1 }
+    this.search.search initial_state, (success, result) ->
+      test.equal result.length, 2
+      test.equal result[0].state, initial_state
+      test.notEqual result[1].state, initial_state
+      test.done()
+
+  # TODO: Create a test for paths that check back on themselves thus 
+  # testing the array 'contains' code and the rejection of the state
 }
