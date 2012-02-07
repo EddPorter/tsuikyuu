@@ -1,5 +1,4 @@
 util = require('util')
-_ = require 'underscore'
 
 Search = () ->
   return
