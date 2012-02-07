@@ -1,6 +1,6 @@
 {
   "author": "Edd Porter <search@eddporter.com> (http://eddporter.com/)",
-  "name": "search",
+  "name": "tsuikyuu",
   "description": "A JavaScript search and planning framework.",
   "version": "0.0.0",
   "keywords": [
@@ -8,10 +8,10 @@
     "plan",
     "ai"
   ],
-  "homepage": "https://github.com/EddPorter/search",
+  "homepage": "https://github.com/EddPorter/tsuikyuu",
   "repository": {
     "type": "git",
-    "url": "git://github.com/EddPorter/search.git"
+    "url": "git://github.com/EddPorter/tsuikyuu.git"
   },
   "engines": {
     "node": ">= 0.6.10"
