@@ -1,4 +1,5 @@
 should = require 'should'
+_ = require 'underscore'
 
 describe 'require \'../lib/search\'', () ->
   it 'should not throw an error', () ->
@@ -109,7 +110,6 @@ describe 'Search', () ->
       this.search.remove_choice = (frontier) ->
         [frontier[0], frontier[1..]]
       this.search.is_goal = (state) ->
-        console.dir state
         state != initial_state
       this.search.next_actions = (state) ->
         ['up']
@@ -129,7 +129,6 @@ describe 'Search', () ->
       this.search.remove_choice = (frontier) ->
         [frontier[0], frontier[1..]]
       this.search.is_goal = (state) ->
-        console.dir state
         state != initial_state
       this.search.next_actions = (state) ->
         ['up']
@@ -145,5 +144,21 @@ describe 'Search', () ->
         result[1].state.should.not.equal initial_state
         done()
 
-  # TODO: Create a test for paths that check back on themselves thus 
-  # testing the array 'contains' code and the rejection of the state
+    it 'should terminate even when repeated states are encountered', () ->
+      initial_state = 19
+      this.search.remove_choice = (frontier) ->
+        f = _.sortBy frontier, (n) -> -n.length
+        [f[0], f[1..]]
+      this.search.is_goal = (state) ->
+        state == initial_state + 2
+      this.search.next_actions = (state) ->
+        [0, 1, -1]
+      this.search.apply_action_to_state = (state, action) ->
+        state + action
+      result = this.search.search initial_state
+      should.exist result
+      result.should.have.length 3
+      result[0].should.have.property 'state'
+      result[0].state.should.equal initial_state
+      result[1].state.should.equal initial_state + 1
+      result[2].state.should.equal initial_state + 2
