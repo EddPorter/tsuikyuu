@@ -1,143 +1,149 @@
-nodeunit = require 'nodeunit'
+should = require 'should'
 
-exports['search_moduleExists_success'] = (test) ->
-  require '../lib/search'
-  test.done()
+describe 'require \'../lib/search\'', () ->
+  it 'should not throw an error', () ->
+    require '../lib/search'
 
-exports['search_moduleExport_exists'] = (test) ->
-  Search = require('../lib/search').Search
-  test.notEqual Search, null
-  test.done()
+describe 'require(\'../lib/search\').Search', () ->
+  it 'should be non-null', () ->
+    should.exist require('../lib/search').Search
 
-exports['search_createNewObject_success'] = (test) ->
-  Search = require('../lib/search').Search
-  search = new Search()
-  test.notEqual search, null
-  test.done()
+describe 'new Search()', () ->
+  it 'should be non-null', () ->
+    Search = require('../lib/search').Search
+    should.exist new Search()
 
-exports['search'] = nodeunit.testCase {
-  setUp: (callback) ->
+describe 'Search', () ->
+  beforeEach () ->
+    console.log 'setting up'
     Search = require('../lib/search').Search
     this.search = new Search()
-    callback()
   
-  # tearDown: (callback) ->
+  # afterEach = () ->
   
-  'checkInitialValueOfRemoveChoice_undefined': (test) ->
-    test.equal this.search.remove_choice, undefined
-    test.done()
-    
-  'setRemoveChoiceFunction_success': (test) ->
-    this.search.remove_choice = () ->
-      test.done()
-    test.notEqual this.search.remove_choice, undefined
-    this.search.remove_choice()
+  describe 'remove_choice', () ->
+    it 'is undefined initially', () ->
+      should.not.exist this.search.remove_choice
 
-  'checkInitialValueOfIsGoal_undefined': (test) ->
-    test.equal this.search.is_goal, undefined
-    test.done()
-    
-  'setIsGoalFunction_success': (test) ->
-    this.search.is_goal = () ->
-      test.done()
-    test.notEqual this.search.is_goal, undefined
-    this.search.is_goal()
+    it 'should be customisable', (done) ->
+      this.search.remove_choice = () ->
+        done()
+      should.exist this.search.remove_choice
+      this.search.remove_choice()
+  
+  describe 'is_goal', () ->
+    it 'is undefined initially', () ->
+      should.not.exist this.search.is_goal
 
-  'checkInitialValueOfNextActions_undefined': (test) ->
-    test.equal this.search.next_actions, undefined
-    test.done()
-    
-  'setNextActionsFunction_success': (test) ->
-    this.search.next_actions = () ->
-      test.done()
-    test.notEqual this.search.next_actions, undefined
-    this.search.next_actions()
+    it 'should be customisable', (done) ->
+      this.search.is_goal = () ->
+        done()
+      should.exist this.search.is_goal
+      this.search.is_goal()
 
-  'checkInitialValueOfApplyActionToState_undefined': (test) ->
-    test.equal this.search.apply_action_to_state, undefined
-    test.done()
-    
-  'setNextActionsFunction_success': (test) ->
-    this.search.apply_action_to_state = () ->
-      test.done()
-    test.notEqual this.search.apply_action_to_state, undefined
-    this.search.apply_action_to_state()
+  describe 'next_actions', () ->
+    it 'is undefined initially', () ->
+      should.not.exist this.search.next_actions
 
-  'searchFunction_exists': (test) ->
-    test.notEqual this.search.search, null
-    test.done()
+    it 'should be customisable', (done) ->
+      this.search.next_actions = () ->
+        done()
+      should.exist this.search.next_actions
+      this.search.next_actions()
 
-  'async_testLoopingPath_success': (test) ->
-    this.search.search_loop = (f, e, c) ->
-      console.log 'looping'
-      test.done()
-    this.search.search null, () ->
-      return
+  describe 'apply_action_to_state', () ->
+    it 'is undefined initially', () ->
+      should.not.exist this.search.apply_action_to_state
 
-  'sync_allStatesAreGoals_returnsInitialState': (test) ->
-    this.search.remove_choice = (frontier) ->
-      [frontier[0], frontier[1..]]
-    this.search.is_goal = (state) ->
-      true
-    initial_state =
-      data1: 'something',
-      data2: 42
-    result = this.search.search initial_state
-    test.equal result.length, 1
-    test.equal result[0].state, initial_state
-    test.done()
+    it 'should be customisable', (done) ->
+      this.search.apply_action_to_state = () ->
+        done()
+      should.exist this.search.apply_action_to_state
+      this.search.apply_action_to_state()
 
-  'async_allStatesAreGoals_returnsInitialState': (test) ->
-    this.search.remove_choice = (frontier) ->
-      [frontier[0], frontier[1..]]
-    this.search.is_goal = (state) ->
-      true
-    initial_state =
-      data1: 'something',
-      data2: 42
-    this.search.search initial_state, (success, result) ->
-      test.equal result.length, 1
-      test.equal result[0].state, initial_state
-      test.done()
+  describe 'search()', () ->
+    it 'should exist', () ->
+      should.exist this.search.search
 
-  'sync_allButStartStateAreGoals_returnsLengthTwoPath': (test) ->
-    initial_state =
-      data1: 'stuff'
-      data2: 81
-    this.search.remove_choice = (frontier) ->
-      [frontier[0], frontier[1..]]
-    this.search.is_goal = (state) ->
-      console.dir state
-      state != initial_state
-    this.search.next_actions = (state) ->
-      ['up']
-    this.search.apply_action_to_state = (state, action) ->
-      { data1: state.data1, data2: state.data2 + 1 }
-    result = this.search.search initial_state
-    test.equal result.length, 2
-    test.equal result[0].state, initial_state
-    test.notEqual result[1].state, initial_state
-    test.done()
+    it 'should loop asynchronously', (done) ->
+      this.search.search_loop = (f, e, c) ->
+        done()
+      this.search.search null, () ->
+        return
 
-  'async_allButStartStateAreGoals_returnsLengthTwoPath': (test) ->
-    initial_state =
-      data1: 'stuff'
-      data2: 81
-    this.search.remove_choice = (frontier) ->
-      [frontier[0], frontier[1..]]
-    this.search.is_goal = (state) ->
-      console.dir state
-      state != initial_state
-    this.search.next_actions = (state) ->
-      ['up']
-    this.search.apply_action_to_state = (state, action) ->
-      { data1: state.data1, data2: state.data2 + 1 }
-    this.search.search initial_state, (success, result) ->
-      test.equal result.length, 2
-      test.equal result[0].state, initial_state
-      test.notEqual result[1].state, initial_state
-      test.done()
+    it 'should return the initial state when all states are goals', () ->
+      this.search.remove_choice = (frontier) ->
+        [frontier[0], frontier[1..]]
+      this.search.is_goal = (state) ->
+        true
+      initial_state =
+        data1: 'something',
+        data2: 42
+      result = this.search.search initial_state
+      should.exist result
+      result.should.have.length 1
+      result[0].should.have.property 'state'
+      result[0].state.should.equal initial_state
+
+    it 'should return the initial state when all states are goals (async)', (done) ->
+      this.search.remove_choice = (frontier) ->
+        [frontier[0], frontier[1..]]
+      this.search.is_goal = (state) ->
+        true
+      initial_state =
+        data1: 'something',
+        data2: 42
+      this.search.search initial_state, (success, result) ->
+        should.exist success
+        success.should.be.true
+        should.exist result
+        result.should.have.length 1
+        result[0].should.have.property 'state'
+        result[0].state.should.equal initial_state
+        done()
+
+    it 'should find a path of length 2 if all but the start state are goals', () ->
+      initial_state =
+        data1: 'stuff'
+        data2: 81
+      this.search.remove_choice = (frontier) ->
+        [frontier[0], frontier[1..]]
+      this.search.is_goal = (state) ->
+        console.dir state
+        state != initial_state
+      this.search.next_actions = (state) ->
+        ['up']
+      this.search.apply_action_to_state = (state, action) ->
+        { data1: state.data1, data2: state.data2 + 1 }
+      result = this.search.search initial_state
+      should.exist result
+      result.should.have.length 2
+      result[0].should.have.property 'state'
+      result[0].state.should.equal initial_state
+      result[1].state.should.not.equal initial_state
+
+    it 'should find a path of length 2 if all but the start state are goals (async)', (done) ->
+      initial_state =
+        data1: 'stuff'
+        data2: 81
+      this.search.remove_choice = (frontier) ->
+        [frontier[0], frontier[1..]]
+      this.search.is_goal = (state) ->
+        console.dir state
+        state != initial_state
+      this.search.next_actions = (state) ->
+        ['up']
+      this.search.apply_action_to_state = (state, action) ->
+        { data1: state.data1, data2: state.data2 + 1 }
+      this.search.search initial_state, (success, result) ->
+        should.exist success
+        success.should.be.true
+        should.exist result
+        result.should.have.length 2
+        result[0].should.have.property 'state'
+        result[0].state.should.equal initial_state
+        result[1].state.should.not.equal initial_state
+        done()
 
   # TODO: Create a test for paths that check back on themselves thus 
   # testing the array 'contains' code and the rejection of the state
-}
