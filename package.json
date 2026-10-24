@@ -3,6 +3,7 @@
   "name": "tsuikyuu",
   "description": "A JavaScript search and planning framework.",
   "version": "0.0.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "keywords": [
     "search",
     "plan",
