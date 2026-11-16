@@ -20,7 +20,6 @@ More explainers will be added to the same folder, and listed in [`index.html`](i
 | --- | --- |
 | `index.html` | The landing page that lists the explainers |
 | `explainers/` | One HTML file per explainer |
-| `legacy/` | An early (2012) CoffeeScript sketch of the same search loop, with `mocha` tests. Kept for reference only: it is not maintained, has known problems (such as comparing states by reference) and has not been run recently. The explainer's loop is the better starting point. |
 | `.nojekyll` | Stops GitHub Pages running Jekyll over the site |
 
 ## Licence

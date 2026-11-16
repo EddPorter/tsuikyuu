@@ -10,76 +10,119 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+JP:wght@500;700&family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;500;700&display=swap">
 <style>
+/* Blue ground, with yellow and pink as accents and ink only on light panels. */
 :root {
-  --yellow: #ecff2b; --ink: #0a0a0a; --blue: #2f3cff; --pink: #ff4fa3; --white: #fff;
+  --blue: #2f3cff; --ink: #0a0a0a; --yellow: #ecff2b; --pink: #ff4fa3; --white: #fff;
   --display: "Dela Gothic One", "Noto Sans JP", sans-serif;
   --body: "Work Sans", "Noto Sans JP", system-ui, sans-serif;
   --mono: "Space Mono", "Noto Sans JP", ui-monospace, monospace;
   --gutter: clamp(16px, 4vw, 48px);
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--yellow); color: var(--ink); font-family: var(--body); font-size: 19px; line-height: 1.55; }
+body {
+  margin: 0; color: var(--white); font-family: var(--body); font-size: 19px; line-height: 1.55;
+  background: radial-gradient(rgba(255, 255, 255, .16) 2px, transparent 2.5px) 0 0 / 16px 16px, var(--blue);
+}
 .page { overflow-x: clip; }
 a { color: inherit; }
 p, h1, h2 { margin: 0; }
-:focus-visible { outline: 4px solid var(--blue); outline-offset: 4px; }
+:focus-visible { outline: 4px solid var(--yellow); outline-offset: 4px; }
 
-.topbar { background: var(--ink); color: var(--yellow); font-family: var(--mono); font-size: 15px; letter-spacing: .06em; text-transform: uppercase; }
+.topbar { background: var(--white); color: var(--ink); border-bottom: 4px solid var(--ink); font-family: var(--mono); font-size: 15px; letter-spacing: .06em; text-transform: uppercase; }
 .topbar .inner { max-width: 1000px; margin: 0 auto; padding: 12px max(var(--gutter), env(safe-area-inset-right, 0px)) 12px max(var(--gutter), env(safe-area-inset-left, 0px)); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
-.topbar a { text-decoration: underline; }
-.topbar a:focus-visible { outline-color: var(--yellow); }
+.topbar a { font-weight: 700; }
+.topbar a:focus-visible { outline-color: var(--blue); }
 
-.wrap { max-width: 1000px; margin: 0 auto; padding: 56px max(var(--gutter), env(safe-area-inset-right, 0px)) 96px max(var(--gutter), env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 64px; }
+.wrap { max-width: 1000px; margin: 0 auto; padding: 64px max(var(--gutter), env(safe-area-inset-right, 0px)) 80px max(var(--gutter), env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 72px; }
 
-.hero { position: relative; display: flex; flex-direction: column; gap: 28px; }
-.burst { position: absolute; inset: -30px -200px 0 -200px; background: repeating-conic-gradient(from 0deg at 30% 50%, var(--yellow) 0deg 3deg, var(--white) 3deg 6deg); -webkit-mask-image: radial-gradient(circle at 30% 50%, transparent 14%, #000 62%); mask-image: radial-gradient(circle at 30% 50%, transparent 14%, #000 62%); }
-.reading { position: relative; align-self: flex-start; background: var(--ink); color: var(--yellow); padding: 8px 18px; font-family: var(--mono); font-weight: 700; font-size: 17px; transform: rotate(-1.5deg); }
-.title { position: relative; font-family: var(--display); font-weight: 400; font-size: clamp(36px, 11vw, 112px); line-height: .9; letter-spacing: -.02em; text-transform: uppercase; text-shadow: 8px 8px 0 var(--pink); overflow-wrap: anywhere; }
-.lede { position: relative; max-width: 30em; font-size: clamp(20px, 2.4vw, 26px); line-height: 1.45; font-weight: 500; background: var(--white); border: 4px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); padding: 20px 24px; transform: rotate(.6deg); }
+/* hero: the kanji is the centrepiece, with horizontal chase lines behind it */
+.hero { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(20px, 5vw, 56px); align-items: center; }
+.streaks {
+  position: absolute; inset: -24px -200px -24px -200px;
+  background: repeating-linear-gradient(0deg, transparent 0 20px, rgba(255, 255, 255, .28) 20px 24px, transparent 24px 52px);
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 45%, transparent 75%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 45%, transparent 75%);
+}
+.kanji {
+  position: relative; writing-mode: vertical-rl; font-family: var(--display); font-size: clamp(96px, 20vw, 220px); line-height: 1;
+  color: var(--yellow); -webkit-text-stroke: 4px var(--ink); text-shadow: 10px 10px 0 var(--pink); letter-spacing: .02em;
+}
+.intro { position: relative; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.reading { align-self: flex-start; background: var(--yellow); color: var(--ink); border: 4px solid var(--ink); padding: 4px 16px; font-family: var(--mono); font-weight: 700; font-size: 16px; transform: rotate(-2deg); }
+.title { font-family: var(--display); font-weight: 400; font-size: clamp(36px, 6.6vw, 72px); line-height: .95; letter-spacing: -.01em; text-transform: uppercase; color: var(--white); text-shadow: 6px 6px 0 var(--ink); overflow-wrap: anywhere; }
+.lede { background: var(--white); color: var(--ink); border: 4px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); padding: 18px 22px; font-size: clamp(18px, 2.2vw, 23px); line-height: 1.45; font-weight: 500; max-width: 26em; }
 
-h2 { align-self: flex-start; font-family: var(--display); font-weight: 400; font-size: clamp(28px, 5vw, 52px); line-height: 1.05; text-transform: uppercase; background: var(--ink); color: var(--yellow); padding: 10px 24px; transform: rotate(1deg); }
-.list { display: flex; flex-direction: column; gap: 44px; }
-.cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 48px 40px; }
-.card { position: relative; display: block; height: 100%; text-decoration: none; color: var(--white); border: 4px solid var(--ink); box-shadow: 10px 10px 0 var(--ink); padding: 36px 32px 32px; background: radial-gradient(rgba(255,255,255,.22) 2px, transparent 2.5px) 0 0 / 12px 12px, var(--blue); transform: rotate(-1.2deg); transition: transform .15s ease, box-shadow .15s ease; }
-.card:hover, .card:focus-visible { transform: rotate(0deg) translate(-4px, -4px); box-shadow: 16px 16px 0 var(--ink); }
-.card .kind { position: absolute; top: -20px; right: 20px; background: var(--yellow); color: var(--ink); border: 4px solid var(--ink); padding: 2px 14px; font-family: var(--mono); font-weight: 700; font-size: 15px; text-transform: uppercase; transform: rotate(3deg); }
-.card .name { display: block; font-family: var(--display); font-size: clamp(26px, 3.4vw, 34px); line-height: 1.05; margin-bottom: 14px; overflow-wrap: anywhere; }
-.card .desc { display: block; font-size: 18px; line-height: 1.45; }
-.more { font-family: var(--mono); font-size: 16px; }
+/* episode list */
+.list { display: flex; flex-direction: column; gap: 32px; }
+h2 { font-family: var(--display); font-weight: 400; font-size: clamp(28px, 5vw, 48px); line-height: 1.05; text-transform: uppercase; text-shadow: 4px 4px 0 var(--ink); border-bottom: 6px solid var(--yellow); padding-bottom: 10px; }
+.eps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 28px; }
+.ep {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: stretch; text-decoration: none; color: var(--ink);
+  background: var(--white); border: 4px solid var(--ink); box-shadow: 10px 10px 0 var(--ink); transition: transform .15s ease, box-shadow .15s ease;
+}
+.ep:hover, .ep:focus-visible { transform: translate(-4px, -4px); box-shadow: 14px 14px 0 var(--ink); }
+.ep .num { display: flex; align-items: center; justify-content: center; background: var(--yellow); border-right: 4px solid var(--ink); padding: 0 clamp(14px, 3vw, 32px); font-family: var(--display); font-size: clamp(22px, 3.4vw, 34px); white-space: nowrap; }
+.ep .body { padding: 20px 24px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ep .kind { font-family: var(--mono); font-weight: 700; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+.ep .name { font-family: var(--display); font-size: clamp(24px, 3.6vw, 36px); line-height: 1.05; overflow-wrap: anywhere; }
+.ep .desc { font-size: 18px; line-height: 1.45; }
+.ep .go { display: flex; align-items: center; justify-content: center; background: var(--pink); border-left: 4px solid var(--ink); padding: 0 clamp(14px, 3vw, 28px); font-family: var(--display); font-size: 32px; }
 
-footer { display: flex; flex-direction: column; gap: 12px; font-family: var(--mono); font-size: 14px; border-top: 4px solid var(--ink); padding-top: 20px; }
-@media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+.next { border: 4px dashed var(--white); padding: 20px 24px; display: flex; flex-direction: column; gap: 4px; }
+.next .jp { font-family: var(--display); font-size: 26px; }
+.next .en { font-family: var(--mono); font-size: 16px; }
+
+footer { background: var(--ink); color: var(--yellow); border: 4px solid var(--ink); padding: 16px 20px; font-family: var(--mono); font-size: 14px; }
+footer a:focus-visible { outline-color: var(--white); }
+
+@media (max-width: 640px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .kanji { writing-mode: horizontal-tb; font-size: clamp(72px, 26vw, 140px); }
+  .ep { grid-template-columns: auto minmax(0, 1fr); }
+  .ep .go { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ep { transition: none; } }
 </style>
 </head>
 <body>
 <div class="page">
 <div class="topbar">
   <div class="inner">
-    <span>eddporter.com/tsuikyuu</span>
-    <nav aria-label="Elsewhere"><a href="https://eddporter.com/">&larr; eddporter.com</a></nav>
+    <span>eddporter.com / tsuikyuu</span>
+    <nav aria-label="Elsewhere"><a href="https://eddporter.com/">&larr; Home</a></nav>
   </div>
 </div>
 
 <div class="wrap">
   <header class="hero">
-    <div class="burst" aria-hidden="true"></div>
-    <p class="reading"><span lang="ja">追及</span> / tsuikyuu: pursuit</p>
-    <h1 class="title">Tsuikyuu</h1>
-    <p class="lede">Small interactive explainers for algorithms. Each one is a single page you can open, poke at and read the code of.</p>
+    <div class="streaks" aria-hidden="true"></div>
+    <div class="kanji" lang="ja" aria-hidden="true">追及</div>
+    <div class="intro">
+      <p class="reading"><span lang="ja">追及</span> = tsuikyuu = pursuit</p>
+      <h1 class="title">Tsuikyuu</h1>
+      <p class="lede">Small interactive explainers for algorithms. Each one is a single page you can open, poke at and read the code of.</p>
+    </div>
   </header>
 
   <main class="list">
-    <h2><span lang="ja">解説</span> · Explainers</h2>
-    <ul class="cards">
+    <h2>Explainers</h2>
+    <ol class="eps">
       <li>
-        <a class="card" href="explainers/one-loop-many-searches.html">
-          <span class="kind">Search</span>
-          <span class="name">One loop, many searches</span>
-          <span class="desc">Breadth-first, depth-first, Dijkstra, greedy and A* are one search loop with a single function swapped. Paint a map and watch each one run.</span>
+        <a class="ep" href="explainers/one-loop-many-searches.html">
+          <span class="num" lang="ja">第1話</span>
+          <span class="body">
+            <span class="kind">Search</span>
+            <span class="name">One loop, many searches</span>
+            <span class="desc">Breadth-first, depth-first, Dijkstra, greedy and A* are one search loop with a single function swapped. Paint a map and watch each one run.</span>
+          </span>
+          <span class="go" aria-hidden="true">&rarr;</span>
         </a>
       </li>
-    </ul>
-    <p class="more">More explainers will be added here.</p>
+    </ol>
+    <div class="next">
+      <p class="jp" lang="ja">次回予告</p>
+      <p class="en">Next episode: more explainers will be added here.</p>
+    </div>
   </main>
 
   <footer>
