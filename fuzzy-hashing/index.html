@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Nearly The Same</title>
+<meta name="description" content="An interactive explainer of fuzzy hashing: why an ordinary hash cannot spot near-copies of a message, and how shingles, MinHash and banding find whole campaigns without comparing every pair.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: a single reading column that builds the idea in stages. Each stage ends in a small workbench you can poke. */
+:root {
+  --bg: #eceff2;
+  --surface: #fbfcfd;
+  --cell: #f0f3f5;
+  --ink: #16212b;
+  --muted: #55646f;
+  --line: #cdd5dc;
+  --accent: #2b2bd6;
+  --accent-soft: #e3e3fb;
+  --on-accent: #ffffff;
+  --hit: #f2b01e;
+  --warn: #b3261e;
+  --code-bg: #15222c;
+  --code-ink: #d8e2ea;
+  --code-cm: #7f93a3;
+  --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
+    --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --hit: #f5b83d; --warn: #ff8a80;
+    --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
+  --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --hit: #f5b83d; --warn: #ff8a80;
+  --code-bg: #0b1117;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px));
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 500; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; max-width: 65ch; }
+
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field > .lab, .lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+textarea { font: inherit; font-size: 15px; width: 100%; min-height: 120px; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+input[type="range"] { accent-color: var(--accent); width: 190px; max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
+.seg label:last-of-type { border-right: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.status { min-height: 2.4em; font-weight: 500; }
+.big { font-family: var(--font-mono); font-size: 34px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* hashes and signatures */
+.hash { font-family: var(--font-mono); font-size: 18px; letter-spacing: .04em; overflow-wrap: anywhere; }
+.hash b { font-weight: 700; color: var(--warn); }
+.sig { display: flex; flex-wrap: wrap; gap: 3px; }
+.sig i { width: 14px; height: 14px; border-radius: 3px; background: var(--cell); border: 1px solid var(--line); }
+.sig i.eq { background: var(--accent); border-color: var(--accent); }
+.bits { display: flex; flex-wrap: wrap; gap: 2px; }
+.bits i { width: 14px; height: 20px; border-radius: 3px; border: 1px solid var(--line); font-style: normal; font-family: var(--font-mono); font-size: 11px; display: inline-flex; align-items: center; justify-content: center; background: var(--cell); }
+.bits i.one { background: var(--muted); color: var(--surface); }
+.bits i.diff { outline: 3px solid var(--warn); outline-offset: 0; }
+
+.shingles { display: flex; flex-wrap: wrap; gap: 4px; max-height: 190px; overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); }
+.sh { font-family: var(--font-mono); font-size: 12px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.sh.shared { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; }
+td.mono { font-family: var(--font-mono); font-weight: 400; }
+svg.chart { width: 100%; height: auto; max-width: 640px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.chart text { fill: var(--muted); font-size: 12px; font-family: var(--font-body); }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .curve { stroke: var(--accent); fill: none; stroke-width: 3; }
+.chart .mark { stroke: var(--hit); stroke-width: 3; stroke-dasharray: 6 4; }
+
+.groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.group h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.group ul { margin: 0; padding-left: 1.1em; font-size: 13px; display: grid; gap: 3px; }
+.tag { font-family: var(--font-mono); font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--accent); white-space: nowrap; }
+.tag.ham { background: var(--cell); border-color: var(--line); }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+
+@media (max-width: 760px) { .two { grid-template-columns: minmax(0, 1fr); } dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>Nearly the same</h1>
+    <p class="lead">A mass mailer sends one message to millions of people, with small changes in each copy. An ordinary fingerprint cannot connect them. This page builds up the idea of a fuzzy fingerprint, where similar messages give similar fingerprints, and uses it to find a whole campaign without comparing every message with every other.</p>
+  </header>
+
+  <section aria-labelledby="h-exact">
+    <h2 id="h-exact">Why an ordinary hash is not enough</h2>
+    <p>A hash turns any text into a short fingerprint. Identical messages give identical fingerprints, so a mail system that has seen a message once could recognise every other copy at a glance. The trouble is that a hash is built to change completely when its input changes even a little. Add one reference code to a copy and the fingerprint has nothing in common with the original.</p>
+    <p>Below is a made-up message and a slightly changed copy. The messages here are invented examples, not real mail. Try the buttons, or edit either message.</p>
+    <div class="panel">
+      <div class="two">
+        <label class="field" for="msgA"><span class="lab">Message A</span><textarea id="msgA" spellcheck="false"></textarea></label>
+        <label class="field" for="msgB"><span class="lab">Message B (a copy with changes)</span><textarea id="msgB" spellcheck="false"></textarea></label>
+      </div>
+      <div class="row" role="group" aria-label="Make a changed copy">
+        <button class="btn small" type="button" data-v="ref">Add a reference code</button>
+        <button class="btn small" type="button" data-v="swap">Swap a few words</button>
+        <button class="btn small" type="button" data-v="sentence">Add a sentence</button>
+        <button class="btn small" type="button" data-v="char">Change one letter</button>
+        <button class="btn small" type="button" data-v="reset">Make B the same as A</button>
+      </div>
+      <div class="two">
+        <div><span class="lab">Fingerprint of A</span><p class="hash" id="hashA"></p></div>
+        <div><span class="lab">Fingerprint of B</span><p class="hash" id="hashB"></p></div>
+      </div>
+      <p class="status" id="hash-status" role="status" aria-live="polite"></p>
+    </div>
+    <p class="note">The fingerprint here is a 53-bit hash shown in hexadecimal. Digits that differ between the two are in red.</p>
+    <p>A mass mailer can exploit this deliberately. If every copy gets its own random tweak, no two copies share a fingerprint. What we want is the opposite property: a fingerprint that stays similar when the message stays similar.</p>
+  </section>
+
+  <section aria-labelledby="h-shingles">
+    <h2 id="h-shingles">Pieces again: shingles</h2>
+    <p>The first step is one you have seen on the other pages: cut the thing into overlapping pieces. For text, the usual pieces are runs of a few consecutive words, called <strong>shingles</strong>. First tidy the message by making it lower case and removing punctuation, so that trivial differences do not count. Then slide a window of <em>k</em> words along it.</p>
+    <p>Two messages that are mostly the same share most of their shingles. A single changed word only spoils the <em>k</em> shingles that contain it. This is the same idea as the pieces of a word in <a href="../shortest-unique-identifiers/">Just enough letters</a>, applied to words instead of letters.</p>
+    <div class="panel">
+      <label class="field" for="shingle-k"><span class="lab">Words per shingle (k): <span id="shingle-k-v">3</span></span><input type="range" id="shingle-k" min="1" max="6" value="3"></label>
+      <div class="two">
+        <div><span class="lab">Shingles of A</span><div class="shingles" id="shA"></div></div>
+        <div><span class="lab">Shingles of B</span><div class="shingles" id="shB"></div></div>
+      </div>
+      <div class="readout">
+        <div><span class="k">In A</span><span class="v" id="r-a">0</span></div>
+        <div><span class="k">In B</span><span class="v" id="r-b">0</span></div>
+        <div><span class="k">Shared</span><span class="v" id="r-shared">0</span></div>
+        <div><span class="k">Similarity</span><span class="big" id="r-jac">0%</span></div>
+      </div>
+      <p class="note">Similarity is the shared shingles divided by all the different shingles in either message. It is called the Jaccard similarity: 100% for the same shingles, 0% for none in common.</p>
+    </div>
+    <details open>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-shingles"></div>
+    </details>
+    <p>Shared shingles are shown in blue. Try different values of <em>k</em>. Short shingles are forgiving but match unrelated text by accident. Long ones are strict, and one changed word spoils more of them.</p>
+  </section>
+
+  <section aria-labelledby="h-pairs">
+    <h2 id="h-pairs">Comparing every pair does not scale</h2>
+    <p>We could now compare every message with every other, using shingle sets. But the number of pairs grows with the square of the number of messages.</p>
+    <div class="tablewrap">
+      <table id="pairs-table"></table>
+    </div>
+    <p>A real system would have billions of messages to consider. What it needs is a short summary of each message such that similar summaries are easy to find without looking at every pair.</p>
+  </section>
+
+  <section aria-labelledby="h-minhash">
+    <h2 id="h-minhash">MinHash: a short summary that keeps the similarity</h2>
+    <p>Here is the trick. Pick a random hash function and apply it to every shingle in a message. Keep only the smallest value. Do the same for another message with the same function. The surprising fact is that the two smallest values are equal exactly when the single shingle that hashed lowest across <em>both</em> messages is in both. The chance of that is the Jaccard similarity itself.</p>
+    <p>One such value is a very noisy guess. Repeat it with many different hash functions and keep all the minimums. That list is the message's <strong>signature</strong>, and the fraction of positions where two signatures agree estimates the similarity. Slide the signature length and see how the estimate settles.</p>
+    <div class="panel">
+      <div class="row">
+        <label class="field" for="sig-n"><span class="lab">Signature length: <span id="sig-n-v">64</span></span><input type="range" id="sig-n" min="0" max="6" value="4"></label>
+        <button class="btn" type="button" id="sig-new">Use different random functions</button>
+      </div>
+      <div class="two">
+        <div><span class="lab">Signature of A (blue where it agrees with B)</span><div class="sig" id="sigA"></div></div>
+        <div><span class="lab">Signature of B (blue where it agrees with A)</span><div class="sig" id="sigB"></div></div>
+      </div>
+      <div class="readout">
+        <div><span class="k">Estimated from signatures</span><span class="big" id="sig-est">0%</span></div>
+        <div><span class="k">Exact similarity</span><span class="big" id="sig-exact">0%</span></div>
+        <div><span class="k">Positions that agree</span><span class="v" id="sig-eq">0</span></div>
+      </div>
+      <p class="note" id="sig-note"></p>
+    </div>
+    <details open>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-minhash"></div>
+    </details>
+    <p>The signature has the same short length however long the message is. It is cheap to store and to compare.</p>
+  </section>
+
+  <section aria-labelledby="h-lsh">
+    <h2 id="h-lsh">Finding likely twins without comparing every pair</h2>
+    <p>Signatures are short, but comparing every pair of them is still every pair. The next trick is to avoid most comparisons altogether. Cut each signature into <em>b</em> bands of <em>r</em> positions. Give each band a label made of its values. Two messages are <strong>candidates</strong> if they share a whole band label, which is a lookup in a table of labels. This is an index, just like the one on <a href="../shortest-unique-identifiers/#h-index">Just enough letters</a>: instead of asking every message about every other, you look up who else has the same band.</p>
+    <p>More rows per band makes a match harder to get by chance, so it favours very similar pairs. More bands gives more chances, so it catches less similar ones. The curve shows the chance that a pair of a given similarity becomes a candidate.</p>
+    <div class="panel">
+      <div class="field"><span class="lab" id="lab-bands">Bands &times; rows (a signature of 64)</span><div class="seg" role="radiogroup" aria-labelledby="lab-bands" id="seg-bands"></div></div>
+      <div id="lsh-chart"></div>
+      <p class="status" id="lsh-status" role="status" aria-live="polite"></p>
+    </div>
+    <details open>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-lsh"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-batch">
+    <h2 id="h-batch">Finding a campaign</h2>
+    <p>Now put it together. Below is a made-up batch of 28 messages: four invented mass mailings, five slightly different copies each, mixed with eight genuine messages. Two of the genuine ones deliberately look like the mailings: a real invoice, and a real note about a missed delivery. The page cuts every message into shingles, makes a signature, finds candidates by band labels, confirms each candidate by comparing signatures, and groups the confirmed pairs. It knows which messages belong to which campaign only so that it can mark its own homework afterwards.</p>
+    <div class="panel">
+      <div class="row">
+        <label class="field" for="b-k"><span class="lab">Words per shingle: <span id="b-k-v">3</span></span><input type="range" id="b-k" min="2" max="5" value="3"></label>
+        <label class="field" for="b-thr"><span class="lab">Confirm at similarity of at least: <span id="b-thr-v">30</span>%</span><input type="range" id="b-thr" min="10" max="90" step="5" value="30"></label>
+      </div>
+      <div class="field"><span class="lab" id="lab-bands2">Bands &times; rows</span><div class="seg" role="radiogroup" aria-labelledby="lab-bands2" id="seg-bands2"></div></div>
+      <div class="row"><button class="btn" type="button" id="b-new">Make a different batch</button></div>
+      <div class="readout">
+        <div><span class="k">Pairs in all</span><span class="v" id="b-all">0</span></div>
+        <div><span class="k">Candidate pairs found</span><span class="v" id="b-cand">0</span></div>
+        <div><span class="k">Confirmed</span><span class="v" id="b-conf">0</span></div>
+        <div><span class="k">Groups</span><span class="v" id="b-groups">0</span></div>
+      </div>
+      <p class="status" id="b-status" role="status" aria-live="polite"></p>
+      <div class="groups" id="b-grid"></div>
+    </div>
+    <p>Try the settings. Raise the confirmation level, or use fewer, longer bands, and the mailings start to fall out of their groups. Lower it, and the genuine delivery note joins the parcel group. Look at the invoice group: the genuine invoice stays in it until the setting is strict enough that real mailings start dropping out too. That message is as similar to the mailings as they are to each other, so no setting separates them cleanly. Similarity can show that messages are alike, but not that they are unwanted.</p>
+  </section>
+
+  <section aria-labelledby="h-simhash">
+    <h2 id="h-simhash">Another way: SimHash</h2>
+    <p>MinHash is not the only fuzzy fingerprint. <strong>SimHash</strong> turns a message into one short string of bits. Each shingle hashes to a pattern of bits. For every bit position, count how many shingles have a 1 there against a 0, and let the majority decide that bit of the fingerprint. Similar messages vote the same way on most bits, so the number of bits that differ (the Hamming distance) is small. Here are the fingerprints of your two messages from above.</p>
+    <div class="panel">
+      <div class="two">
+        <div><span class="lab">Fingerprint of A (32 bits)</span><div class="bits" id="bitsA"></div></div>
+        <div><span class="lab">Fingerprint of B, with differing bits outlined</span><div class="bits" id="bitsB"></div></div>
+      </div>
+      <p class="status" id="sim-status" role="status" aria-live="polite"></p>
+    </div>
+    <details open>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-simhash"></div>
+    </details>
+    <p>A SimHash is one number, so it is even smaller than a MinHash signature, and comparing two of them is a single bit count. Edit message B at the top of the page, or use its buttons, and watch the distance change.</p>
+  </section>
+
+  <section aria-labelledby="h-others">
+    <h2 id="h-others">Other fuzzy fingerprints</h2>
+    <dl class="lines">
+      <div><dt>ssdeep</dt><dd>Context-triggered piecewise hashing. A rolling hash decides where to cut a file into chunks, hashes each chunk, and the digest is a string of small pieces, so inserting or deleting text only changes the chunks nearby. It compares files, such as sets of related malware, and not only text.</dd></div>
+      <div><dt>TLSH and Nilsimsa</dt><dd>Digests built from counts of small patterns of bytes, designed so that the distance between two digests reflects how similar the inputs are. Nilsimsa was designed with spam detection in mind. I am recalling both from memory, so check them before relying on this.</dd></div>
+      <div><dt>Pyzor, Razor and DCC</dt><dd>Open anti-spam systems that share fingerprints of messages between many mail servers, so that one server's sighting helps all the others. I recall that they publish how they work, but check each before relying on that.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-limits">
+    <h2 id="h-limits">What this cannot do</h2>
+    <ul class="try">
+      <li><strong>A fingerprint is a signal, not a verdict.</strong> A group of near-identical messages might be a spam campaign, or a company's legitimate newsletter, or a receipt sent to thousands of customers. Real systems combine similarity with other evidence, such as how many recipients, how people react and where the mail came from.</li>
+      <li><strong>Senders adapt.</strong> Anything that reads the words can be tricked by changing the words enough, or by putting the message in an image. This page is about the idea, not about beating or defeating any particular filter.</li>
+      <li><strong>It reads the message.</strong> Text fingerprinting looks at the content of mail. Whether that is acceptable is a question about privacy as well as engineering, and different services answer it differently.</li>
+      <li><strong>Nobody outside publishes the details.</strong> Large mail providers do not describe how their filters work, so this page cannot say what any of them does. It describes the public techniques.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Locality-sensitive hashing</dt><dd>The family of ideas this page used: hash so that similar things land together. Banding is one scheme of it.</dd></div>
+      <div><dt>Shingling and min-wise hashing</dt><dd>I believe these were introduced for finding near-duplicate web pages in the late 1990s, by Andrei Broder and colleagues. Check before citing it.</dd></div>
+      <div><dt>Charikar's SimHash</dt><dd>The bit-vote fingerprint above, with schemes for searching by small Hamming distance.</dd></div>
+      <div><dt>Weighted MinHash and b-bit MinHash</dt><dd>Variants that count repeated shingles, or store fewer bits per position.</dd></div>
+      <div><dt>Edit distance</dt><dd>A different idea of &ldquo;nearly the same&rdquo; that counts the changes needed to turn one text into another. It is more precise and much slower.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>An ordinary hash changes completely when its input changes a little, so near-copies of a message look unrelated.</li>
+      <li>Cutting a message into shingles lets you measure how much two messages overlap.</li>
+      <li>MinHash squeezes each message into a short signature whose agreement estimates that overlap.</li>
+      <li>Splitting signatures into bands finds likely twins by lookup, without comparing every pair.</li>
+      <li>The settings trade missed campaigns against wrong groupings, and the result is a signal rather than a verdict.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const pct = (x) => Math.round(x * 100) + '%';
+
+  /* ---------- the functions (displayed and run as written) ---------- */
+  const cyrb53 = (str, seed = 0) => {
+    let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+    h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+    h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+  };
+
+  const words = (text) => {
+    // lower case, punctuation removed
+    return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  };
+
+  const shingles = (text, k) => {
+    const w = words(text);
+    const out = new Set();
+    for (let i = 0; i + k <= w.length; i++) out.add(w.slice(i, i + k).join(' '));
+    if (!out.size && w.length) out.add(w.join(' '));
+    return out;
+  };
+
+  const jaccard = (a, b) => {
+    let shared = 0;
+    for (const s of a) if (b.has(s)) shared++;
+    const total = a.size + b.size - shared;
+    return total ? shared / total : 0;
+  };
+
+  const hash32 = (str, seed) => {
+    // a 32-bit hash that depends on a seed
+    let h = (0x811c9dc5 ^ seed) >>> 0;
+    for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193);
+    h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35);
+    return (h ^ (h >>> 16)) >>> 0;
+  };
+
+  const minhash = (set, seeds) => {
+    // for each random function, keep the smallest value over all shingles
+    return seeds.map((seed) => {
+      let min = 0xffffffff;
+      for (const s of set) min = Math.min(min, hash32(s, seed));
+      return min;
+    });
+  };
+
+  const agreement = (a, b) => {
+    let same = 0;
+    for (let i = 0; i < a.length; i++) if (a[i] === b[i]) same++;
+    return same / a.length;
+  };
+
+  const bandKeys = (sig, rows) => {
+    // cut the signature into bands and label each band
+    const keys = [];
+    for (let i = 0; i + rows <= sig.length; i += rows) keys.push((i / rows) + ':' + sig.slice(i, i + rows).join(','));
+    return keys;
+  };
+
+  const candidates = (sigs, rows) => {
+    // messages sharing a whole band label are candidates
+    const buckets = new Map();
+    sigs.forEach((sig, id) => bandKeys(sig, rows).forEach((key) => {
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(id);
+    }));
+    const pairs = new Set();
+    for (const ids of buckets.values()) {
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.add(ids[i] + '-' + ids[j]);
+    }
+    return pairs;
+  };
+
+  const simhash = (set) => {
+    // each shingle votes on each of 32 bits
+    const votes = new Array(32).fill(0);
+    for (const s of set) {
+      const h = hash32(s, 12345);
+      for (let b = 0; b < 32; b++) votes[b] += (h >>> b) & 1 ? 1 : -1;
+    }
+    return votes.map((v) => (v > 0 ? 1 : 0));
+  };
+
+  /* ---------- helpers that are not part of the idea ---------- */
+  const mulberry32 = (a) => () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const pick = (rng, list) => list[Math.floor(rng() * list.length)];
+  const hex = (rng, n) => Array.from({ length: n }, () => '0123456789abcdef'[Math.floor(rng() * 16)]).join('');
+  const makeSeeds = (n, base) => { const r = mulberry32(base); return Array.from({ length: n }, () => Math.floor(r() * 4294967296)); };
+
+  /* ---------- code panels ---------- */
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|new|null|true|false)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  function showCode(id, items) {
+    items.forEach(([name, fn, tag]) => {
+      const d = el('div', 'fn');
+      d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+      d.appendChild(codeBlock(name + ' = ' + dedent(fn.toString())));
+      $(id).appendChild(d);
+    });
+  }
+  showCode('code-shingles', [['words', words, 'tidy the text'], ['shingles', shingles, 'every run of k words'], ['jaccard', jaccard, 'shared over all different']]);
+  showCode('code-minhash', [['hash32', hash32, 'a hash that takes a seed'], ['minhash', minhash, 'the smallest value for each seed'], ['agreement', agreement, 'the fraction of positions that match']]);
+  showCode('code-lsh', [['bandKeys', bandKeys, 'label each band of a signature'], ['candidates', candidates, 'who shares a band label']]);
+  showCode('code-simhash', [['simhash', simhash, 'each shingle votes on 32 bits']]);
+
+  /* ---------- section 1: exact hashes ---------- */
+  const BASE = 'Congratulations! You have been selected to receive a free gift card worth 500. To claim your prize, reply to this message with your full name and delivery address before Friday. Offer ends soon.';
+  const FILLERS = ['Thank you for your time.', 'This offer cannot be combined with any other offer.', 'Please do not reply if you are not interested.', 'We value your privacy.', 'Terms apply.'];
+  const SWAPS = [['congratulations', 'well done'], ['free', 'complimentary'], ['claim', 'collect'], ['prize', 'reward'], ['message', 'email'], ['soon', 'shortly'], ['selected', 'chosen'], ['receive', 'get'], ['reply', 'respond']];
+  let variantCount = 0;
+  function variantOf(text, kind) {
+    const rng = mulberry32(++variantCount * 7919 + 13);
+    if (kind === 'ref') return text + ' Ref ' + hex(rng, 6) + '.';
+    if (kind === 'sentence') return text + ' ' + pick(rng, FILLERS);
+    if (kind === 'char') {
+      const idx = [...text].map((c, i) => (/[a-z]/i.test(c) ? i : -1)).filter((i) => i >= 0);
+      const at = pick(rng, idx), c = text[at];
+      const swapped = c === 'z' ? 'y' : c === 'Z' ? 'Y' : String.fromCharCode(c.charCodeAt(0) + 1);
+      return text.slice(0, at) + swapped + text.slice(at + 1);
+    }
+    if (kind === 'swap') {
+      let out = text, n = 0;
+      [...SWAPS].sort(() => rng() - 0.5).forEach(([a, b]) => {
+        const re = new RegExp('\\b' + a + '\\b', 'i');
+        if (n < 3 && re.test(out)) { out = out.replace(re, b); n++; }
+      });
+      return out;
+    }
+    return text;
+  }
+  function drawHashes() {
+    const a = cyrb53($('msgA').value).toString(16).padStart(14, '0'), b = cyrb53($('msgB').value).toString(16).padStart(14, '0');
+    const render = (target, mine, other) => {
+      target.textContent = '';
+      [...mine].forEach((ch, i) => { const s = ch === other[i] ? document.createTextNode(ch) : el('b', null, ch); target.appendChild(s); });
+    };
+    render($('hashA'), a, b); render($('hashB'), b, a);
+    const diff = [...a].filter((ch, i) => ch !== b[i]).length;
+    $('hash-status').textContent = a === b ? 'The messages are identical, so the fingerprints are identical.' :
+      'The fingerprints differ in ' + diff + ' of ' + a.length + ' digits, however small the change was. As far as the fingerprint can tell, these messages have nothing to do with each other.';
+  }
+
+  /* ---------- section 2: shingles ---------- */
+  function drawShingles() {
+    const k = +$('shingle-k').value;
+    $('shingle-k-v').textContent = String(k);
+    const A = shingles($('msgA').value, k), B = shingles($('msgB').value, k);
+    const fill = (box, mine, other) => {
+      box.textContent = '';
+      [...mine].forEach((s) => box.appendChild(el('span', 'sh' + (other.has(s) ? ' shared' : ''), s)));
+    };
+    fill($('shA'), A, B); fill($('shB'), B, A);
+    let shared = 0; for (const s of A) if (B.has(s)) shared++;
+    $('r-a').textContent = A.size; $('r-b').textContent = B.size; $('r-shared').textContent = shared;
+    $('r-jac').textContent = pct(jaccard(A, B));
+  }
+
+  /* ---------- section 3: pairs ---------- */
+  (function pairsTable() {
+    const t = $('pairs-table');
+    t.innerHTML = '<thead><tr><th>Messages</th><th>Pairs to compare</th></tr></thead>';
+    const body = el('tbody');
+    [10n, 1000n, 1000000n, 1000000000n].forEach((n) => {
+      const tr = el('tr');
+      tr.append(el('td', null, n.toLocaleString('en-GB')), el('td', 'mono', (n * (n - 1n) / 2n).toLocaleString('en-GB')));
+      body.appendChild(tr);
+    });
+    t.appendChild(body);
+  })();
+
+  /* ---------- section 4: MinHash ---------- */
+  const SIG_LENGTHS = [4, 8, 16, 32, 64, 128, 256];
+  let seedBase = 1;
+  function drawSignatures() {
+    const n = SIG_LENGTHS[+$('sig-n').value];
+    $('sig-n-v').textContent = String(n);
+    const k = +$('shingle-k').value;
+    const A = shingles($('msgA').value, k), B = shingles($('msgB').value, k);
+    const seeds = makeSeeds(n, seedBase);
+    const sa = minhash(A, seeds), sb = minhash(B, seeds);
+    const boxA = $('sigA'), boxB = $('sigB');
+    boxA.textContent = ''; boxB.textContent = '';
+    sa.forEach((v, i) => { const eq = sa[i] === sb[i] ? 'eq' : ''; boxA.appendChild(el('i', eq)); boxB.appendChild(el('i', eq)); });
+    const est = agreement(sa, sb), exact = jaccard(A, B);
+    const same = sa.filter((v, i) => v === sb[i]).length;
+    $('sig-est').textContent = pct(est); $('sig-exact').textContent = pct(exact); $('sig-eq').textContent = same + ' of ' + n;
+    $('sig-note').textContent = 'The estimate is off by ' + Math.round(Math.abs(est - exact) * 100) + ' percentage points here. A typical error is about ' + Math.round(100 * Math.sqrt(Math.max(exact * (1 - exact), 0.01) / n)) + ' points for a signature this long, and it shrinks as the signature grows. The signature has ' + n + ' numbers whatever the length of the message, using the shingles of ' + k + ' words from above.';
+  }
+  $('sig-new').addEventListener('click', () => { seedBase++; drawSignatures(); });
+
+  /* ---------- section 5: banding ---------- */
+  const BAND_CONFIGS = { '64x1': { name: '64 × 1', rows: 1 }, '32x2': { name: '32 × 2', rows: 2 }, '16x4': { name: '16 × 4', rows: 4 }, '8x8': { name: '8 × 8', rows: 8 } };
+  let bandKey = '32x2', bandKey2 = '32x2';
+  function bandSeg(id, name, current, onPick) {
+    const e = $(id);
+    Object.entries(BAND_CONFIGS).forEach(([key, v]) => {
+      e.insertAdjacentHTML('beforeend', '<input type="radio" name="' + name + '" id="' + name + '-' + key + '" value="' + key + '"' + (key === current ? ' checked' : '') + '><label for="' + name + '-' + key + '">' + v.name + '</label>');
+    });
+    e.addEventListener('change', (ev) => onPick(ev.target.value));
+  }
+  const chance = (s, r, b) => 1 - Math.pow(1 - Math.pow(s, r), b);
+  function drawLsh() {
+    const r = BAND_CONFIGS[bandKey].rows, b = 64 / r;
+    const k = +$('shingle-k').value;
+    const A = shingles($('msgA').value, k), B = shingles($('msgB').value, k);
+    const seeds = makeSeeds(64, 777);
+    const sa = minhash(A, seeds), sb = minhash(B, seeds);
+    const s = jaccard(A, B);
+    const W = 620, H = 260, l = 50, rr = 30, t = 16, bt = 44;
+    const NS = 'http://www.w3.org/2000/svg';
+    const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([kk, v]) => e.setAttribute(kk, v)); if (text != null) e.textContent = text; return e; };
+    const x = (v) => l + v * (W - l - rr), y = (v) => H - bt - v * (H - t - bt);
+    const svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart', role: 'img', 'aria-label': 'Chance of becoming a candidate against similarity, for ' + b + ' bands of ' + r + ' rows.' });
+    for (let i = 0; i <= 4; i++) {
+      svg.appendChild(mk('line', { x1: l, x2: W - rr, y1: y(i / 4), y2: y(i / 4), class: 'grid' }));
+      svg.appendChild(mk('text', { x: l - 8, y: y(i / 4) + 4, 'text-anchor': 'end' }, pct(i / 4)));
+      svg.appendChild(mk('text', { x: x(i / 4), y: H - bt + 18, 'text-anchor': 'middle' }, pct(i / 4)));
+    }
+    svg.appendChild(mk('text', { x: (l + W - rr) / 2, y: H - 8, 'text-anchor': 'middle' }, 'Similarity of the pair'));
+    svg.appendChild(mk('text', { x: 14, y: (t + H - bt) / 2, 'text-anchor': 'middle', transform: 'rotate(-90 14 ' + (t + H - bt) / 2 + ')' }, 'Chance of being candidates'));
+    const pts = []; for (let i = 0; i <= 100; i++) pts.push(x(i / 100) + ',' + y(chance(i / 100, r, b)));
+    svg.appendChild(mk('polyline', { class: 'curve', points: pts.join(' ') }));
+    svg.appendChild(mk('line', { class: 'mark', x1: x(s), x2: x(s), y1: y(0), y2: y(1) }));
+    const box = $('lsh-chart'); box.textContent = ''; box.appendChild(svg);
+    const cand = candidates([sa, sb], r).size > 0;
+    $('lsh-status').textContent = 'With ' + b + ' bands of ' + r + ' rows, a pair as similar as A and B (' + pct(s) + ', the dashed line) has a ' + pct(chance(s, r, b)) + ' chance of becoming candidates. For these two messages, with these random functions, they ' + (cand ? 'did' : 'did not') + '. A pair that is only 20% similar has a ' + pct(chance(0.2, r, b)) + ' chance, and one that is 80% similar has ' + pct(chance(0.8, r, b)) + '.';
+  }
+  bandSeg('seg-bands', 'bands', bandKey, (v) => { bandKey = v; drawLsh(); });
+
+  /* ---------- section 6: a batch of messages ---------- */
+  const NAMES = ['Alex', 'Sam', 'Jordan', 'Casey', 'Morgan', 'Riley', 'Taylor', 'Jamie'];
+  const CAMPAIGNS = [
+    { id: 'Prize', make: (r) => 'Congratulations ' + pick(r, NAMES) + ', you have been selected to receive a free ' + pick(r, ['gift card', 'holiday voucher', 'tablet computer']) + ' worth ' + pick(r, ['500', '750', '1000']) + '. To claim your prize, reply to this message with your full name and delivery address before ' + pick(r, ['Friday', 'Monday', 'midnight']) + '.' },
+    { id: 'Parcel', make: (r) => 'Your parcel could not be delivered because the address was incomplete. To arrange a new delivery please confirm your address and pay the small redelivery fee within ' + pick(r, ['two', 'three', 'five']) + ' days. Reference ' + hex(r, 6) + '.' },
+    { id: 'Sale', make: (r) => 'Last chance! Up to ' + pick(r, ['50', '60', '70']) + ' percent off designer watches and handbags, this weekend only. Order today and get free shipping to any address. Visit our shop now before stock runs out.' },
+    { id: 'Invoice', make: (r) => 'Please find attached invoice ' + hex(r, 5) + ' for services provided last month. Payment is due within ' + pick(r, ['seven', 'ten', 'fourteen']) + ' days. If you have any questions about this invoice please reply to this message.' }
+  ];
+  const ORDINARY = [
+    'Hi Sam, are we still on for lunch on Thursday? I could do half past twelve at the usual place.',
+    'Notes from this morning: the build is green, the release moves to next week and Priya will own the migration plan.',
+    'Reminder that the allotment society meets on Saturday at ten. Bring gloves, as we are clearing the far beds.',
+    'Thanks for sending the photos. The second one is the best, I think. Can you send it at full size so I can print it?',
+    'Could you let me know which days next month suit you for the boiler service? Mornings are easiest for me.',
+    'Welcome to the book club. This month we are reading a short novel and meeting at the library on the first Tuesday.',
+    'Please find attached invoice 1042 for services provided last month. Payment is due within 14 days. If you have any questions about this invoice please reply to this message. Thanks, Sam.',
+    'Your parcel could not be delivered because nobody was in. To arrange a new delivery please call the number on the card we left. Reference 7733.'
+  ];
+  let batchSeed = 1, batch = [];
+  function makeBatch(seed) {
+    const r = mulberry32(seed * 104729 + 7);
+    const items = [];
+    CAMPAIGNS.forEach((c) => {
+      for (let i = 0; i < 5; i++) {
+        let text = c.make(r);
+        if (r() < 0.6) text += ' ' + pick(r, FILLERS);
+        if (r() < 0.4) text += ' Ref ' + hex(r, 6) + '.';
+        SWAPS.filter(() => r() < 0.12).forEach(([a, b]) => { text = text.replace(new RegExp('\\b' + a + '\\b', 'i'), b); });
+        items.push({ text, label: c.id });
+      }
+    });
+    ORDINARY.forEach((text) => items.push({ text, label: 'ordinary' }));
+    return items.map((m) => [r(), m]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+  }
+  function find(parent, i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+  function drawBatch() {
+    const k = +$('b-k').value, thr = +$('b-thr').value / 100;
+    $('b-k-v').textContent = String(k); $('b-thr-v').textContent = String(Math.round(thr * 100));
+    const rows = BAND_CONFIGS[bandKey2].rows;
+    const seeds = makeSeeds(64, 4242);
+    const sets = batch.map((m) => shingles(m.text, k));
+    const sigs = sets.map((s) => minhash(s, seeds));
+    const cands = candidates(sigs, rows);
+    const parent = batch.map((_, i) => i);
+    let confirmed = 0;
+    cands.forEach((key) => {
+      const [i, j] = key.split('-').map(Number);
+      if (agreement(sigs[i], sigs[j]) >= thr) { confirmed++; parent[find(parent, i)] = find(parent, j); }
+    });
+    const groups = new Map();
+    batch.forEach((m, i) => { const root = find(parent, i); if (!groups.has(root)) groups.set(root, []); groups.get(root).push(i); });
+    const multi = [...groups.values()].filter((g) => g.length > 1).sort((a, b) => b.length - a.length);
+    const n = batch.length;
+    $('b-all').textContent = String(n * (n - 1) / 2); $('b-cand').textContent = String(cands.size); $('b-conf').textContent = String(confirmed); $('b-groups').textContent = String(multi.length);
+    const grid = $('b-grid'); grid.textContent = '';
+    let campaignInGroup = 0, ordinaryInGroup = 0, mixed = 0;
+    multi.forEach((g, gi) => {
+      const counts = {}; g.forEach((i) => { counts[batch[i].label] = (counts[batch[i].label] || 0) + 1; });
+      const labels = Object.keys(counts);
+      g.forEach((i) => { if (batch[i].label === 'ordinary') ordinaryInGroup++; else campaignInGroup++; });
+      if (labels.length > 1) mixed++;
+      const card = el('div', 'group');
+      card.appendChild(el('h4', null, 'Group ' + (gi + 1) + ': ' + g.length + ' messages'));
+      const ul = el('ul');
+      g.forEach((i) => {
+        const li = el('li');
+        li.appendChild(el('span', 'tag' + (batch[i].label === 'ordinary' ? ' ham' : ''), batch[i].label));
+        li.appendChild(document.createTextNode(' ' + batch[i].text.slice(0, 64) + '…'));
+        ul.appendChild(li);
+      });
+      card.appendChild(ul); grid.appendChild(card);
+    });
+    const campaignTotal = batch.filter((m) => m.label !== 'ordinary').length;
+    const alone = batch.filter((m, i) => m.label !== 'ordinary' && groups.get(find(parent, i)).length === 1).length;
+    $('b-status').textContent = 'The page compared ' + cands.size + ' candidate pairs instead of all ' + (n * (n - 1) / 2) + '. It found ' + multi.length + ' groups. ' + campaignInGroup + ' of the ' + campaignTotal + ' mailing messages were grouped' + (alone ? ', and ' + alone + ' were left on their own' : '') + '. ' +
+      (ordinaryInGroup ? ordinaryInGroup + ' ordinary message' + (ordinaryInGroup === 1 ? ' was' : 's were') + ' pulled into a group wrongly. ' : 'No ordinary message was pulled into a group. ') +
+      (mixed ? mixed + ' group' + (mixed === 1 ? ' mixes' : 's mix') + ' different mailings or ordinary messages. ' : '') + 'The tags on each message show what it really is, and the page did not look at them while grouping.';
+  }
+  bandSeg('seg-bands2', 'bands2', bandKey2, (v) => { bandKey2 = v; drawBatch(); });
+  $('b-k').addEventListener('input', drawBatch); $('b-thr').addEventListener('input', drawBatch);
+  $('b-new').addEventListener('click', () => { batch = makeBatch(++batchSeed); drawBatch(); });
+
+  /* ---------- section 7: SimHash ---------- */
+  function drawSim() {
+    const k = +$('shingle-k').value;
+    const A = simhash(shingles($('msgA').value, k)), B = simhash(shingles($('msgB').value, k));
+    const draw = (box, mine, other) => {
+      box.textContent = '';
+      mine.forEach((bit, i) => box.appendChild(el('i', (bit ? 'one' : '') + (other && other[i] !== bit ? ' diff' : ''), String(bit))));
+    };
+    draw($('bitsA'), A, null); draw($('bitsB'), B, A);
+    const d = A.filter((v, i) => v !== B[i]).length;
+    $('sim-status').textContent = 'The fingerprints differ in ' + d + ' of 32 bits. Compare that with the exact similarity of ' + pct(jaccard(shingles($('msgA').value, k), shingles($('msgB').value, k))) + ' from above. Unrelated messages would differ in about half the bits, around 16.';
+  }
+
+  /* ---------- wiring ---------- */
+  function redrawAll() { drawHashes(); drawShingles(); drawSignatures(); drawLsh(); drawSim(); }
+  $('msgA').addEventListener('input', redrawAll); $('msgB').addEventListener('input', redrawAll);
+  $('shingle-k').addEventListener('input', redrawAll);
+  $('sig-n').addEventListener('input', drawSignatures);
+  document.querySelectorAll('[data-v]').forEach((b) => b.addEventListener('click', () => {
+    const kind = b.getAttribute('data-v');
+    $('msgB').value = kind === 'reset' ? $('msgA').value : variantOf($('msgB').value.trim() === '' ? $('msgA').value : $('msgB').value, kind);
+    redrawAll();
+  }));
+  $('msgA').value = BASE;
+  $('msgB').value = variantOf(BASE, 'swap');
+  batch = makeBatch(batchSeed);
+  redrawAll(); drawBatch();
+})();
+</script>
+</body>
+</html>
