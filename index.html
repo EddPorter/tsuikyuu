@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="Tsuikyuu: small interactive explainers for algorithms, each a single page you can open, poke and read the code of.">
+<title>Tsuikyuu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+JP:wght@500;700&family=Space+Mono:wght@400;700&family=Work+Sans:wght@400;500;700&display=swap">
+<style>
+:root {
+  --yellow: #ecff2b; --ink: #0a0a0a; --blue: #2f3cff; --pink: #ff4fa3; --white: #fff;
+  --display: "Dela Gothic One", "Noto Sans JP", sans-serif;
+  --body: "Work Sans", "Noto Sans JP", system-ui, sans-serif;
+  --mono: "Space Mono", "Noto Sans JP", ui-monospace, monospace;
+  --gutter: clamp(16px, 4vw, 48px);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--yellow); color: var(--ink); font-family: var(--body); font-size: 19px; line-height: 1.55; }
+.page { overflow-x: clip; }
+a { color: inherit; }
+p, h1, h2 { margin: 0; }
+:focus-visible { outline: 4px solid var(--blue); outline-offset: 4px; }
+
+.topbar { background: var(--ink); color: var(--yellow); font-family: var(--mono); font-size: 15px; letter-spacing: .06em; text-transform: uppercase; }
+.topbar .inner { max-width: 1000px; margin: 0 auto; padding: 12px max(var(--gutter), env(safe-area-inset-right, 0px)) 12px max(var(--gutter), env(safe-area-inset-left, 0px)); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; }
+.topbar a { text-decoration: underline; }
+.topbar a:focus-visible { outline-color: var(--yellow); }
+
+.wrap { max-width: 1000px; margin: 0 auto; padding: 56px max(var(--gutter), env(safe-area-inset-right, 0px)) 96px max(var(--gutter), env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 64px; }
+
+.hero { position: relative; display: flex; flex-direction: column; gap: 28px; }
+.burst { position: absolute; inset: -30px -200px 0 -200px; background: repeating-conic-gradient(from 0deg at 30% 50%, var(--yellow) 0deg 3deg, var(--white) 3deg 6deg); -webkit-mask-image: radial-gradient(circle at 30% 50%, transparent 14%, #000 62%); mask-image: radial-gradient(circle at 30% 50%, transparent 14%, #000 62%); }
+.reading { position: relative; align-self: flex-start; background: var(--ink); color: var(--yellow); padding: 8px 18px; font-family: var(--mono); font-weight: 700; font-size: 17px; transform: rotate(-1.5deg); }
+.title { position: relative; font-family: var(--display); font-weight: 400; font-size: clamp(36px, 11vw, 112px); line-height: .9; letter-spacing: -.02em; text-transform: uppercase; text-shadow: 8px 8px 0 var(--pink); overflow-wrap: anywhere; }
+.lede { position: relative; max-width: 30em; font-size: clamp(20px, 2.4vw, 26px); line-height: 1.45; font-weight: 500; background: var(--white); border: 4px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); padding: 20px 24px; transform: rotate(.6deg); }
+
+h2 { align-self: flex-start; font-family: var(--display); font-weight: 400; font-size: clamp(28px, 5vw, 52px); line-height: 1.05; text-transform: uppercase; background: var(--ink); color: var(--yellow); padding: 10px 24px; transform: rotate(1deg); }
+.list { display: flex; flex-direction: column; gap: 44px; }
+.cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 48px 40px; }
+.card { position: relative; display: block; height: 100%; text-decoration: none; color: var(--white); border: 4px solid var(--ink); box-shadow: 10px 10px 0 var(--ink); padding: 36px 32px 32px; background: radial-gradient(rgba(255,255,255,.22) 2px, transparent 2.5px) 0 0 / 12px 12px, var(--blue); transform: rotate(-1.2deg); transition: transform .15s ease, box-shadow .15s ease; }
+.card:hover, .card:focus-visible { transform: rotate(0deg) translate(-4px, -4px); box-shadow: 16px 16px 0 var(--ink); }
+.card .kind { position: absolute; top: -20px; right: 20px; background: var(--yellow); color: var(--ink); border: 4px solid var(--ink); padding: 2px 14px; font-family: var(--mono); font-weight: 700; font-size: 15px; text-transform: uppercase; transform: rotate(3deg); }
+.card .name { display: block; font-family: var(--display); font-size: clamp(26px, 3.4vw, 34px); line-height: 1.05; margin-bottom: 14px; overflow-wrap: anywhere; }
+.card .desc { display: block; font-size: 18px; line-height: 1.45; }
+.more { font-family: var(--mono); font-size: 16px; }
+
+footer { display: flex; flex-direction: column; gap: 12px; font-family: var(--mono); font-size: 14px; border-top: 4px solid var(--ink); padding-top: 20px; }
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="topbar">
+  <div class="inner">
+    <span>eddporter.com/tsuikyuu</span>
+    <nav aria-label="Elsewhere"><a href="https://eddporter.com/">&larr; eddporter.com</a></nav>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="burst" aria-hidden="true"></div>
+    <p class="reading"><span lang="ja">追及</span> / tsuikyuu: pursuit</p>
+    <h1 class="title">Tsuikyuu</h1>
+    <p class="lede">Small interactive explainers for algorithms. Each one is a single page you can open, poke at and read the code of.</p>
+  </header>
+
+  <main class="list">
+    <h2><span lang="ja">解説</span> · Explainers</h2>
+    <ul class="cards">
+      <li>
+        <a class="card" href="explainers/one-loop-many-searches.html">
+          <span class="kind">Search</span>
+          <span class="name">One loop, many searches</span>
+          <span class="desc">Breadth-first, depth-first, Dijkstra, greedy and A* are one search loop with a single function swapped. Paint a map and watch each one run.</span>
+        </a>
+      </li>
+    </ul>
+    <p class="more">More explainers will be added here.</p>
+  </main>
+
+  <footer>
+    <p>Free to use for noncommercial purposes under the <a href="https://polyformproject.org/licenses/noncommercial/1.0.0">PolyForm Noncommercial License 1.0.0</a>.</p>
+  </footer>
+</div>
+</div>
+</body>
+</html>

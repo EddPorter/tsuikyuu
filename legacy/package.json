@@ -1,7 +1,7 @@
 {
   "author": "Edd Porter <search@eddporter.com> (http://eddporter.com/)",
   "name": "tsuikyuu",
-  "description": "A JavaScript search and planning framework.",
+  "description": "Early (2012) CoffeeScript experiment with a generic search loop. Kept for reference only; superseded by the explainers in this repository.",
   "version": "0.0.0",
   "license": "PolyForm-Noncommercial-1.0.0",
   "keywords": [
@@ -30,10 +30,5 @@
     "test": "make test",
     "preinstall": "coffee -c -b lib/*.coffee"
   },
-  "directories": {
-    "lib": "lib",
-    "doc": "doc",
-    "test": "test",
-    "example": "example"
-  }
+  "private": true
 }
