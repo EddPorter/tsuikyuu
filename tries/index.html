@@ -112,12 +112,13 @@ svg.tree .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; }
 svg.tree .edge.path { stroke: var(--hit); stroke-width: 4; }
 svg.tree .edge.fresh { stroke: var(--accent); stroke-width: 4; }
 svg.tree .n { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
-svg.tree .n.end { stroke: var(--accent); stroke-width: 3.5; }
+svg.tree .endring { fill: none; stroke: var(--accent); stroke-width: 2.5; }
 svg.tree .n.root { fill: var(--ink); stroke: var(--ink); }
 svg.tree .n.path { fill: var(--hit); stroke: var(--hit); }
 svg.tree .n.fresh { fill: var(--accent); stroke: var(--accent); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot.ring { box-shadow: 0 0 0 2px var(--cell), 0 0 0 4.5px var(--accent); margin: 0 4px; }
 .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 2px solid var(--muted); background: var(--surface); }
 
 .pc { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px 2px 8px; border: 2px solid var(--line); border-radius: 6px; background: var(--cell); font-family: var(--font-mono); font-size: 14px; }
@@ -156,7 +157,8 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
   <header style="display:flex;flex-direction:column;gap:16px">
     <p class="crumb"><a href="../">&larr; All explainers</a></p>
     <h1>Shared beginnings</h1>
-    <p class="lead">Many words start the same way. A trie is a tree that stores each shared beginning once. This page builds one a letter at a time, uses it to find words by their start, counts what it saves, and then squashes it into the structure behind suffix trees.</p>
+    <p class="lead">Many words start the same way. A trie is a tree that stores each shared beginning once. This page builds one a letter at a time, uses it to find words by their start, counts what it saves, squashes it into the structure behind suffix trees, and then shares the endings too.</p>
+    <p class="note">It follows on from <a href="../shortest-unique-identifiers/">Just enough letters</a>, which looks for the fewest letters that pick out one word from a list. You do not need to have read that first, and it is linked where it matters.</p>
   </header>
 
   <section aria-labelledby="h-list">
@@ -177,7 +179,7 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
 
   <section aria-labelledby="h-build">
     <h2 id="h-build">A tree of letters</h2>
-    <p>Draw the words as paths. Start at an empty root. To add <code>tea</code>, follow a branch labelled <code>t</code> (making it if it is not there), then <code>e</code>, then <code>a</code>. To add <code>ted</code> afterwards, the <code>t</code> and <code>e</code> branches already exist, so follow them and only make the <code>d</code>. Words that start the same way share the start. A ringed node marks the place where a word ends.</p>
+    <p>Draw the words as paths. Start at an empty root. To add <code>tea</code>, follow a branch labelled <code>t</code> (making it if it is not there), then <code>e</code>, then <code>a</code>. To add <code>ted</code> afterwards, the <code>t</code> and <code>e</code> branches already exist, so follow them and only make the <code>d</code>. Words that start the same way share the start. A node with a ring around it marks the place where a word ends.</p>
     <p>Add the words one at a time and watch the sharing.</p>
     <div class="panel">
       <div class="row">
@@ -190,7 +192,7 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
       <div class="legend" aria-hidden="true">
         <span><i class="dot" style="background:var(--accent);border-color:var(--accent)"></i>New node</span>
         <span><i class="dot" style="background:var(--hit);border-color:var(--hit)"></i>Reused on the way</span>
-        <span><i class="dot" style="border-color:var(--accent);border-width:3.5px"></i>A word ends here</span>
+        <span><i class="dot ring"></i>Ring: a word ends here</span>
       </div>
     </div>
     <p>The code that does this is short. Each node holds its children (a map from a letter to the next node), a count of how many words pass through it, and a flag for whether a word ends there.</p>
@@ -227,13 +229,13 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
     <h2 id="h-cost">What it saves, and what it costs</h2>
     <p>A flat list stores every letter of every word. A trie stores one letter for each node, and shared beginnings are stored once. When many words share their starts the trie holds fewer letters. When none do, it holds exactly as many, plus the cost of the links between nodes. Real memory depends on how those links are stored, so fewer letters is not always fewer bytes.</p>
     <div class="tablewrap"><table id="cost-table"></table></div>
-    <p class="note">The same comparison, for the index on the other page, is in the memory part of <a href="../shortest-unique-identifiers/#h-cost">Scan or index?</a>. That index holds every piece of every word, so a trie saves far more there than it does here.</p>
+    <p class="note">The same comparison for the index used on <a href="../shortest-unique-identifiers/">Just enough letters</a> is in the memory part of <a href="../shortest-unique-identifiers/#h-cost">Scan or index?</a>. That index holds every piece of every word, so a trie saves far more there than it does here.</p>
   </section>
 
   <section aria-labelledby="h-squash">
     <h2 id="h-squash">Squashing it</h2>
     <p>Many nodes have only one child. A path of such nodes can be squashed into a single edge labelled with all its letters. The result is called a <strong>compressed trie</strong>, or radix tree. It has fewer nodes and holds the same words, and the saving grows as words get longer and branch less.</p>
-    <p>Now a bigger idea. Instead of the words themselves, put every <em>ending</em> of every word into the trie: <code>banana</code> gives <code>banana</code>, <code>anana</code>, <code>nana</code> and so on. A trie of all the endings contains every piece of every word as a path from the root, and squashing it gives a <strong>suffix tree</strong>. That is the structure the sorting method on the other page was standing in for. Try both views, and try a single longer word such as <code>banana</code>, where squashing saves the most.</p>
+    <p>Now a bigger idea. Instead of the words themselves, put every <em>ending</em> of every word into the trie: <code>banana</code> gives <code>banana</code>, <code>anana</code>, <code>nana</code> and so on. A trie of all the endings contains every piece of every word as a path from the root, and squashing it gives a <strong>suffix tree</strong>. That is the structure that the sorting method in <a href="../shortest-unique-identifiers/#h-sort">Just enough letters</a> was standing in for. Try both views, and try a single longer word such as <code>banana</code>, where squashing saves the most.</p>
     <div class="panel">
       <div class="row">
         <div class="field"><span class="lab" id="lab-sq-src">What goes in</span><div class="seg" role="radiogroup" aria-labelledby="lab-sq-src" id="sq-src"></div></div>
@@ -244,9 +246,25 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
     </div>
   </section>
 
+  <section aria-labelledby="h-share">
+    <h2 id="h-share">Sharing the endings too</h2>
+    <p>A trie shares beginnings, but nothing else. Look at <code>talked</code> and <code>walked</code> in the Verbs list. After their different first letters, both continue <code>alked</code>, and the two branches are identical copies. Any two parts of the tree that spell out exactly the same endings can be merged into one. Then the structure is no longer a tree, because two different paths can arrive at the same node. It is a <strong>graph</strong>, with no loops, and the leaves, the ends of words, are shared too: every word that finishes at the very end of its path can finish at the same single node.</p>
+    <p>Tick the box and watch the pieces collapse. Counts are not shown, because a merged node stands for several words at once.</p>
+    <div class="panel">
+      <label class="check"><input type="checkbox" id="mg-on"> Merge identical endings</label>
+      <div class="treebox" id="m-tree"></div>
+      <p class="status" id="m-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>This structure is usually called a <strong>DAWG</strong>, a directed acyclic word graph, or a minimal acyclic finite-state automaton. I recall that it is used to store large word lists compactly, for example in word-game programs, but I have not verified that. It gives up some things to get there. A node no longer belongs to one word, so it cannot carry data for a single word, such as a count. And adding a new word to a merged graph is harder than adding one to a trie, because a merged piece that other words share may have to be split apart first. For that reason it is usually built once from a finished list.</p>
+    <details>
+      <summary>The code that merges (also what this page runs)</summary>
+      <div class="stack" id="merge-code"></div>
+    </details>
+  </section>
+
   <section aria-labelledby="h-parts">
     <h2 id="h-parts">The parts you can swap</h2>
-    <p>As on the other pages, the walk down the tree stays the same while two choices change what the tree can do.</p>
+    <p>As in the other explainers, the walk down the tree stays the same while two choices change what the tree can do.</p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
@@ -254,6 +272,7 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
           <tr><td>What a node stores</td><td>An end flag, a count, a list of words</td><td>Whether it can answer &ldquo;is this a word&rdquo;, &ldquo;how many start this way&rdquo; (as above), or &ldquo;which ones&rdquo; without walking further.</td></tr>
           <tr><td>How children are held</td><td>A map, a fixed array, a sorted list</td><td>Speed of each step against memory per node. A fixed array of 26 slots is fast but wasteful when most are empty.</td></tr>
           <tr><td>Whether to squash</td><td>Plain, or compressed</td><td>Far fewer nodes, at the price of splitting an edge when a new word diverges halfway along it.</td></tr>
+          <tr><td>Whether to merge endings</td><td>A tree, or a merged graph</td><td>Fewer nodes again, at the price of losing per-word data and easy insertion.</td></tr>
           <tr><td>What goes in</td><td>Whole words, or every ending</td><td>A dictionary of words, or an index of every piece of every word (a suffix tree once squashed).</td></tr>
         </tbody>
       </table>
@@ -269,7 +288,7 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
       <div><dt>DAWG</dt><dd>A directed acyclic word graph also shares word <em>endings</em>, not only beginnings, so a whole dictionary fits in very little space.</dd></div>
       <div><dt>Aho&ndash;Corasick</dt><dd>Adds links between the branches of a trie so that many patterns can be matched against a text in one pass.</dd></div>
       <div><dt>Longest-prefix match</dt><dd>Routers use trie-like structures to find the most specific rule that matches an address. This is from general knowledge and worth checking before you rely on it.</dd></div>
-      <div><dt>Suffix tree and suffix array</dt><dd>The structures behind the previous page's sorted endings. See <a href="../shortest-unique-identifiers/">Just enough letters</a>.</dd></div>
+      <div><dt>Suffix tree and suffix array</dt><dd>The structures behind the sorted endings on <a href="../shortest-unique-identifiers/#h-sort">Just enough letters</a>..</dd></div>
     </dl>
   </section>
 
@@ -345,6 +364,7 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
     ['Classic', 'tea ted ten to in inn'],
     ['Cars', 'car card care careful cart cat'],
     ['Cities', 'paris parma perth porto prague rome rouen riga'],
+    ['Verbs', 'talk talks talked talking walk walks walked walking'],
     ['Months', 'january june july march may april august'],
     ['Big list', 'apple apply ape art arc bat bar barn bank bake cat cap card care dog door dot dock eat ear east fan far farm fast gold gone good goat game']
   ];
@@ -432,6 +452,7 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
       });
       const isRoot = v === view;
       const cls = 'n' + (isRoot ? ' root' : '') + (v.node.end && !isRoot ? ' end' : '') + (o.fresh && o.fresh.has(v.node) ? ' fresh' : (o.path && o.path.has(v.node) ? ' path' : ''));
+      if (v.node.end && !isRoot) nodes.appendChild(mk('circle', { cx: X(v), cy: Y(v), r: 10.5, class: 'endring' }));
       nodes.appendChild(mk('circle', { cx: X(v), cy: Y(v), r: isRoot ? 7 : 6, class: cls }));
       if (o.counts && !isRoot) nodes.appendChild(mk('text', { x: X(v) + 10, y: Y(v) + 17, class: 'cnt' }, String(v.node.count)));
     };
@@ -631,6 +652,68 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
   $('sq-src').addEventListener('change', (e) => { sqSource = e.target.value; drawSquash(); });
   $('sq-on').addEventListener('change', drawSquash);
   onWords(drawSquash);
+
+
+  /* ---------- section 7: sharing the endings ---------- */
+  function mergeEndings(root) {
+    // give every node a name made from its end flag and its children's names, and merge nodes with the same name
+    const byName = new Map();
+    const merge = (n) => {
+      const kids = [...n.kids].sort(([a], [b]) => (a < b ? -1 : 1)).map(([letter, kid]) => [letter, merge(kid)]);
+      const name = (n.end ? '1' : '0') + kids.map(([letter, kid]) => letter + kid.id).join(',');
+      if (!byName.has(name)) byName.set(name, { id: byName.size, end: !!n.end, kids });
+      return byName.get(name);
+    };
+    return { root: merge(root), size: byName.size - 1 };   // not counting the root
+  }
+  function renderGraph(box, graph) {
+    box.textContent = '';
+    const root = graph.root, LW = 60, DY = 40, M = 26;
+    // order the nodes so that every edge goes forwards, then put each node in the column after its latest parent
+    const order = [], seen = new Set();
+    const visit = (n) => { if (seen.has(n)) return; seen.add(n); n.kids.forEach(([, k]) => visit(k)); order.unshift(n); };
+    visit(root);
+    const layer = new Map(order.map((n) => [n, 0]));
+    order.forEach((n) => n.kids.forEach(([, k]) => layer.set(k, Math.max(layer.get(k), layer.get(n) + 1))));
+    const last = Math.max(...layer.values());
+    order.forEach((n) => { if (!n.kids.length) layer.set(n, last); });   // line the word ends up on the right
+    const columns = Array.from({ length: last + 1 }, () => []);
+    order.forEach((n) => columns[layer.get(n)].push(n));
+    const tallest = Math.max(...columns.map((c) => c.length));
+    const pos = new Map();
+    columns.forEach((c, x) => c.forEach((n, i) => pos.set(n, { x: M + x * LW, y: M + (i + (tallest - c.length) / 2) * DY })));
+    const W = M * 2 + last * LW + 20, H = M * 2 + (tallest - 1) * DY + 40;
+    const NS = 'http://www.w3.org/2000/svg';
+    const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; return e; };
+    const svg = mk('svg', { width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, class: 'tree', role: 'img', 'aria-label': 'A merged graph of the words with ' + graph.size + ' nodes.' });
+    const edges = mk('g'), nodes = mk('g');
+    order.forEach((n) => {
+      const a = pos.get(n), groups = new Map();
+      n.kids.forEach(([letter, k]) => groups.set(k, (groups.get(k) || []).concat(letter)));   // letters going to the same place share one arrow
+      groups.forEach((letters, k) => {
+        const b = pos.get(k), mx = (a.x + b.x) / 2, far = layer.get(k) - layer.get(n) > 1, sag = far ? 28 : 0;
+        edges.appendChild(mk('path', { d: 'M' + a.x + ' ' + a.y + ' C' + (far ? a.x + LW / 2 : mx) + ' ' + (a.y + sag) + ' ' + (far ? b.x - LW / 2 : mx) + ' ' + (b.y + sag) + ' ' + b.x + ' ' + b.y, class: 'edge' }));
+        const ly = far ? (a.y + b.y) / 2 + sag * 0.75 + 15 : (a.y + b.y) / 2 - 6;
+        edges.appendChild(mk('text', { x: mx, y: ly, 'text-anchor': 'middle' }, letters.join(', ')));
+      });
+      if (n.end && n !== root) nodes.appendChild(mk('circle', { cx: a.x, cy: a.y, r: 10.5, class: 'endring' }));
+      nodes.appendChild(mk('circle', { cx: a.x, cy: a.y, r: n === root ? 7 : 6, class: 'n' + (n === root ? ' root' : '') }));
+    });
+    svg.append(edges, nodes);
+    box.appendChild(svg);
+  }
+  function drawShare() {
+    const box = $('m-tree');
+    if (!G.words.length) { box.textContent = ''; $('m-status').textContent = 'Type some words at the top of the page.'; return; }
+    const root = trieOf(G.words), holder = document.createElement('div');
+    const plain = renderTree(holder, root, {});
+    const g = mergeEndings(root);
+    if ($('mg-on').checked) renderGraph(box, g); else renderTree(box, root, {});
+    $('m-status').textContent = 'The trie of your words has ' + plain + ' nodes. ' + ($('mg-on').checked ? 'With identical endings merged it has ' + g.size + (g.size < plain ? ', ' + (plain - g.size) + ' fewer. Every word that ends at the end of its path now shares the same final node.' : '. No endings were identical, so nothing could be merged. Try the Verbs list.') : 'Tick the box to merge identical endings.');
+  }
+  $('mg-on').addEventListener('change', drawShare);
+  onWords(drawShare);
+  { const d = el('div', 'fn'); d.innerHTML = '<header><span class="name">mergeEndings</span><span class="note">one node for each distinct ending</span></header>'; d.appendChild(codeBlock('const mergeEndings = ' + dedent(mergeEndings.toString()))); $('merge-code').appendChild(d); }
 
   /* ---------- start up ---------- */
   PRESETS.forEach(([label, text]) => {
