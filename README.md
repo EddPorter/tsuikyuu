@@ -21,7 +21,6 @@ More explainers will be added as new folders, and listed in [`index.html`](index
 | --- | --- |
 | `index.html` | The landing page that lists the explainers |
 | `<name>/index.html` | One folder per explainer, each holding a single HTML file |
-| `explainers/` | Small redirect pages for the old addresses, `eddporter.com/tsuikyuu/explainers/<name>.html`. They can be deleted once nobody links to those. |
 | `.nojekyll` | Stops GitHub Pages running Jekyll over the site |
 
 ## Licence

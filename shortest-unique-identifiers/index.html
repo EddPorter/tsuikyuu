@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>Just Enough Letters</title>
-<meta name="description" content="An interactive explainer: find the fewest letters that pick out one word from a list, then swap the rules to see how the answer and the cost change.">
+<meta name="description" content="An interactive, step-by-step explainer: find the fewest letters that pick out one word from a list, see why the plain method gets slow, build an index to fix it, then change the rules.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout concept: a reading column that opens into a two-pane workbench (words left, live code right), then a cost comparison. */
+/* Layout concept: a single reading column that builds the idea in stages. Each stage ends in a small workbench you can poke. */
 :root {
   --bg: #eceff2;
   --surface: #fbfcfd;
@@ -20,13 +20,13 @@
   --line: #cdd5dc;
   --accent: #2b2bd6;
   --accent-soft: #e3e3fb;
+  --on-accent: #ffffff;
   --hit: #f2b01e;
-  --good: #1d6f3d;
+  --scan: #b36a00;
   --code-bg: #15222c;
   --code-ink: #d8e2ea;
   --code-cm: #7f93a3;
   --code-kw: #8ec5ff;
-  --slot-bg: #1f3040;
   --hot-bg: #2b2f6b;
   --hot-bar: #9aa0ff;
   --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
@@ -36,15 +36,15 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
-    --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --hit: #f5b83d; --good: #4cc77b;
-    --code-bg: #0b1117; --slot-bg: #17232d;
+    --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --hit: #f5b83d; --scan: #f5b83d;
+    --code-bg: #0b1117;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
-  --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --hit: #f5b83d; --good: #4cc77b;
-  --code-bg: #0b1117; --slot-bg: #17232d;
+  --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --hit: #f5b83d; --scan: #f5b83d;
+  --code-bg: #0b1117;
   color-scheme: dark;
 }
 
@@ -53,7 +53,7 @@ body {
   margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
   padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px));
 }
-.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
 section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
 h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
@@ -66,40 +66,41 @@ code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 a { color: var(--accent); }
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .crumb { font-size: 14px; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; max-width: 65ch; }
 
 /* code */
 pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
 pre.code .ln { display: block; padding: 0 16px; white-space: pre; border-left: 3px solid transparent; }
-pre.code .slot { background: var(--hot-bg); border-left-color: var(--hot-bar); color: #fff; }
+pre.code .active { background: var(--hot-bg); border-left-color: var(--hot-bar); color: #fff; }
 pre.code .cm { color: var(--code-cm); }
 pre.code .kw { color: var(--code-kw); }
-.loop { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px; align-items: start; }
-.legend { display: grid; gap: 14px; margin: 0; }
-.legend div { display: grid; gap: 2px; }
-.legend dt { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--accent); }
-.legend dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 20em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); overflow-wrap: anywhere; }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
 
-/* workbench */
+/* panels and controls */
 .bench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .stage, .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.field > .lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+.field > .lab, .lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
 input[type="text"] { font: inherit; font-family: var(--font-mono); font-size: 15px; width: 100%; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
 input[type="range"] { accent-color: var(--accent); width: 130px; }
 .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
 .seg label:last-of-type { border-right: 0; }
-.seg input:checked + label { background: var(--accent); color: var(--surface); font-weight: 600; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
 .btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
 .btn:hover { border-color: var(--muted); }
-.btn.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .btn.small { padding: 5px 10px; font-size: 13px; }
 
-/* the word rows */
+/* word rows and tiles */
 .words { display: flex; flex-direction: column; gap: 8px; }
 .wrow { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 8px; border: 2px solid transparent; border-radius: 8px; }
 .wrow.cur { border-color: var(--accent); background: var(--accent-soft); }
@@ -107,12 +108,13 @@ input[type="range"] { accent-color: var(--accent); width: 130px; }
 .wrow .idx { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 .tiles { display: flex; flex-wrap: wrap; gap: 4px; }
 .t { width: 32px; height: 38px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 19px; font-weight: 500; background: var(--cell); border: 2px solid var(--line); border-radius: 4px; }
-.t.cand { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.t.cand { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
 .t.hit { background: var(--hit); border-color: var(--hit); color: #16212b; font-weight: 700; }
 .t.res { border-bottom: 5px solid var(--accent); font-weight: 700; }
 .chip { font-family: var(--font-mono); font-size: 14px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--cell); min-width: 4.5em; text-align: center; white-space: nowrap; }
 .chip.found { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 700; }
 .chip.trying { border-style: dashed; }
+.chip.yes { border-color: var(--accent); font-weight: 700; }
 .status { min-height: 3.2em; font-weight: 500; }
 .readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 .readout div { display: flex; flex-direction: column; }
@@ -120,9 +122,51 @@ input[type="range"] { accent-color: var(--accent); width: 130px; }
 .readout .v { font-family: var(--font-mono); font-size: 18px; font-variant-numeric: tabular-nums; }
 .swatches { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
 .swatches span { display: inline-flex; align-items: center; gap: 6px; }
-.swatches i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 2px solid var(--line); }
+.swatches > span > i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; border: 2px solid var(--line); }
 
-.blurb { font-size: 0.98rem; }
+/* pieces grid */
+.plen { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.plen:first-child { border-top: 0; }
+.plen .len { width: 84px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.pc { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px 2px 8px; border: 2px solid var(--line); border-radius: 6px; background: var(--cell); font-family: var(--font-mono); font-size: 14px; }
+.pc i { font-style: normal; font-size: 11px; background: var(--line); color: var(--ink); border-radius: 999px; padding: 0 6px; }
+.pc.repeat { opacity: .5; border-style: dashed; }
+.pc.uniq { border-color: var(--accent); }
+.pc.uniq i { background: var(--accent); color: var(--on-accent); }
+.pc.pick { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.pc.pick i { background: var(--on-accent); color: var(--accent); }
+
+/* index table */
+.ixbox { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); }
+.ixlist { list-style: none; margin: 0; padding: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.ix { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); font-size: 13px; }
+.ix b { font-family: var(--font-mono); }
+.ix .w { font-family: var(--font-mono); font-size: 12px; background: var(--accent-soft); border-radius: 4px; padding: 0 5px; }
+.ix.only { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+
+/* cost and chart */
+.costs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.cost { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.cost .big { font-family: var(--font-mono); font-size: 28px; font-variant-numeric: tabular-nums; }
+.bar { height: 14px; border-radius: 4px; background: var(--cell); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.cost small { color: var(--muted); }
+svg.chart { width: 100%; height: auto; max-width: 720px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.chart text { fill: var(--muted); font-size: 12px; font-family: var(--font-body); }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .l-scan { stroke: var(--scan); fill: none; stroke-width: 3; }
+.chart .l-index { stroke: var(--accent); fill: none; stroke-width: 3; }
+.chart .d-scan { fill: var(--scan); }
+.chart .d-index { fill: var(--accent); }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); max-height: 420px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td.mono { font-family: var(--font-mono); }
+tr.chosen td { background: var(--accent-soft); }
+tr.chosen td:first-child { font-weight: 700; }
 .fn { display: flex; flex-direction: column; gap: 6px; }
 .fn header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; align-items: baseline; }
 .fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
@@ -130,27 +174,13 @@ input[type="range"] { accent-color: var(--accent); width: 130px; }
 details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
 details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
-
-ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
-
-/* cost */
-.costs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-.cost { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
-.cost .big { font-family: var(--font-mono); font-size: 28px; font-variant-numeric: tabular-nums; }
-.bar { height: 14px; border-radius: 4px; background: var(--cell); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--accent); }
-.cost small { color: var(--muted); }
-
-.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 15px; }
-th, td { text-align: left; padding: 10px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
-th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
-tr:last-child td { border-bottom: 0; }
-td:first-child { font-weight: 600; }
+.blurb { font-size: 0.98rem; }
+ul.try, ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
 footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
 
-@media (max-width: 920px) { .loop, .bench { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 920px) { .bench { grid-template-columns: minmax(0, 1fr); } dl.lines div { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 520px) { .t { width: 26px; height: 34px; font-size: 16px; } .wrow { grid-template-columns: minmax(0, 1fr) auto; } .wrow .idx { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
 </head>
 <body>
@@ -158,98 +188,103 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
   <header style="display:flex;flex-direction:column;gap:16px">
     <p class="crumb"><a href="../">&larr; All explainers</a></p>
     <h1>Just enough letters</h1>
-    <p class="lead">To pick one word out of a list you rarely need the whole word. This page finds the fewest letters that do the job, then lets you change the rules and watch how the answers, and the work, change.</p>
+    <p class="lead">To pick one word out of a list you rarely need the whole word. This page works out the fewest letters that do the job, one step at a time. Then it shows why the obvious method gets slow, how an index fixes that, and what changes when you change the rules.</p>
   </header>
 
-  <section aria-labelledby="h-loop">
-    <h2 id="h-loop">The loop</h2>
-    <p>For each word, try pieces of it, shortest first. For each piece, count how many words in the list would match it. Stop at the first piece that gives the answer you want. That is all the program does. Three of its lines can be swapped for others, and they are highlighted.</p>
-    <div class="loop">
-      <pre class="code" id="loop-code" aria-label="The identify loop"></pre>
-      <dl class="legend">
-        <div><dt>match.candidates</dt><dd>Which pieces of a word to try, and what it means for a piece to match another word.</dd></div>
-        <div><dt>counter</dt><dd>How to find the words that match a piece: ask every word, or look it up in a table built once.</dd></div>
-        <div><dt>goal.accept</dt><dd>What count makes a piece good enough: one word, at most two, or every word.</dd></div>
-      </dl>
+  <section aria-labelledby="h-problem">
+    <h2 id="h-problem">What we are after</h2>
+    <p>Picture a list of words and a search box. Type a few letters and every word that contains them lights up. Some pieces light up many words. Some light up just one, and a piece that lights up only one word is enough to pick that word out. For each word in the list we want the shortest piece like that.</p>
+    <div class="panel">
+      <label class="field" for="words"><span class="lab">Your words (up to 12, up to 10 letters each). Everything below uses them.</span><input type="text" id="words" autocomplete="off" spellcheck="false"></label>
+      <div class="row" id="presets" role="group" aria-label="Preset word lists"></div>
+      <p class="note" id="trim" hidden></p>
     </div>
-    <p class="note">The page runs the code you see here. The counters wrap the calls to tally the work done.</p>
+    <div class="panel">
+      <label class="field" for="probe"><span class="lab">Try it by hand: type a piece</span><input type="text" id="probe" autocomplete="off" spellcheck="false" placeholder="for example: an"></label>
+      <div class="words" id="probe-rows"></div>
+      <div class="status" id="probe-status" role="status" aria-live="polite"></div>
+      <div class="row"><button class="btn small" type="button" id="probe-reveal">Show the shortest piece for every word</button></div>
+      <div id="probe-answers" hidden></div>
+    </div>
+    <p class="note">Can you make exactly one word light up with a single letter? With two? The rest of the page is about getting a computer to do this for every word, and to do it quickly.</p>
   </section>
 
-  <section aria-labelledby="h-try">
-    <h2 id="h-try">Try it</h2>
-    <p>Type your own words, or pick a preset. Press Play to watch each word being tried, or Step to go one piece at a time. The three groups of buttons swap the three highlighted parts.</p>
-
-    <div class="bench">
-      <div class="stage">
-        <div class="panel">
-          <label class="field" for="words"><span class="lab">Words (up to 12, up to 10 letters each)</span><input type="text" id="words" autocomplete="off" spellcheck="false"></label>
-          <div class="row" id="presets" role="group" aria-label="Preset word lists"></div>
-          <p class="note" id="trim" hidden></p>
-        </div>
-
-        <div class="panel">
-          <div class="words" id="rows"></div>
-          <div class="swatches" aria-hidden="true">
-            <span><i style="background:var(--accent);border-color:var(--accent)"></i>Piece being tried</span>
-            <span><i style="background:var(--hit);border-color:var(--hit)"></i>Where it matches elsewhere</span>
-            <span><i style="border-bottom:5px solid var(--accent)"></i>Answer found</span>
-          </div>
-          <div class="status" id="status" role="status" aria-live="polite"></div>
-          <div class="readout">
-            <div><span class="k">Pieces tried</span><span class="v" id="r-tried">0</span></div>
-            <div><span class="k" id="r-work-k">Work so far</span><span class="v" id="r-work">0</span></div>
-          </div>
-          <div class="row">
-            <button class="btn" id="b-step" type="button">Step</button>
-            <button class="btn primary" id="b-play" type="button">Play</button>
-            <button class="btn" id="b-finish" type="button">Finish</button>
-            <button class="btn" id="b-restart" type="button">Restart</button>
-            <label class="field" for="speed"><span class="lab">Speed</span><input type="range" id="speed" min="0" max="6" value="3"></label>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="field"><span class="lab" id="lab-match">How a search matches (match)</span><div class="seg" role="radiogroup" aria-labelledby="lab-match" id="seg-match"></div></div>
-          <div class="field"><span class="lab" id="lab-goal">What we are looking for (goal)</span><div class="seg" role="radiogroup" aria-labelledby="lab-goal" id="seg-goal"></div></div>
-          <div class="field"><span class="lab" id="lab-counter">How to count matches (counter)</span><div class="seg" role="radiogroup" aria-labelledby="lab-counter" id="seg-counter"></div></div>
-        </div>
-      </div>
-
-      <div class="side">
-        <div class="panel">
-          <h3>What is plugged in</h3>
-          <p class="blurb" id="blurb-match"></p>
-          <p class="blurb" id="blurb-goal"></p>
-          <p class="blurb" id="blurb-counter"></p>
-        </div>
-        <div id="fn-panel" style="display:flex;flex-direction:column;gap:16px"></div>
-        <details>
-          <summary>Small helpers the code uses</summary>
-          <div class="stack" id="helper-panel"></div>
-        </details>
+  <section aria-labelledby="h-pieces">
+    <h2 id="h-pieces">Pieces of a word</h2>
+    <p>To find the shortest piece by method instead of by hunch, first list every piece of a word: every run of letters that sit side by side. A word with <em>n</em> letters has <em>n</em> &times; (<em>n</em> + 1) &divide; 2 pieces, although some repeat. The grid shows them shortest first, left to right within each length. The small number on each piece is how many words in your list contain it.</p>
+    <div class="panel">
+      <div class="field"><span class="lab" id="lab-pword">Word</span><div class="seg" role="radiogroup" aria-labelledby="lab-pword" id="pick-word"></div></div>
+      <div id="pieces"></div>
+      <p class="note" id="pieces-sum"></p>
+      <div class="swatches" aria-hidden="true">
+        <span><span class="pc"><b>an</b><i>3</i></span>in several words</span>
+        <span><span class="pc repeat"><b>an</b><i>3</i></span>a repeat of an earlier piece</span>
+        <span><span class="pc uniq"><b>nan</b><i>1</i></span>in no other word</span>
+        <span><span class="pc pick"><b>nan</b><i>1</i></span>the first of those: the answer</span>
       </div>
     </div>
+    <p>Why shortest first? Because then the first piece that works is also the shortest one that works, and we can stop looking. If two pieces tie for length, we take the leftmost.</p>
+  </section>
 
-    <h3>Things to try</h3>
-    <ul class="try">
-      <li>Run the first preset with <em>Contains</em> and <em>Only this word</em>. <code>banana</code> needs three letters, but <code>bandana</code> and <code>cabana</code> need only one each.</li>
-      <li>Switch to <em>Starts with</em>. Identifiers now have to be prefixes, like short git hashes, and they get longer.</li>
-      <li>Switch to <em>Letters in order</em>. Gaps are allowed, the way a fuzzy finder matches, and answers get shorter.</li>
-      <li>Load <em>Nested</em>. Some words contain no piece that another word lacks, so they get no identifier at all.</li>
-      <li>Set the goal to <em>Every word</em>. Now the loop looks for the longest text all the words share. Load <em>DNA</em> to see a tie: two pieces are equally long, and each word keeps the first one it meets, so the answers differ.</li>
-    </ul>
+  <section aria-labelledby="h-plain">
+    <h2 id="h-plain">The plain method</h2>
+    <p>Now the method as a loop. For each word, take its pieces in order. For each piece, ask every word whether it contains the piece, and count the yes answers. If only one word says yes, that piece is the answer, so keep it and move on to the next word. Step through it below. The line of code being run is highlighted, and the rows show each word being asked.</p>
+    <div id="walk-scan"></div>
+    <h3>Reading the code</h3>
+    <dl class="lines">
+      <div><dt>const count = counter(words, match);</dt><dd>Choose how matches will be counted. The plain method asks each word in turn. The index, later, does it differently.</dd></div>
+      <div><dt>for (const [i, word] of words.entries())</dt><dd>Take each word in turn.</dd></div>
+      <div><dt>for (const candidate of match.candidates(word, goal.order))</dt><dd>Take that word's pieces, shortest first.</dd></div>
+      <div><dt>const hits = count(candidate);</dt><dd>Find which words contain this piece.</dd></div>
+      <div><dt>const ok = goal.accept(hits.length, words.length);</dt><dd>Is that the right number of words? For now, exactly one.</dd></div>
+      <div><dt>yield &hellip;</dt><dd>Pause so the page can draw what just happened. A program would not need this line.</dd></div>
+      <div><dt>if (ok) { best = candidate; break; }</dt><dd>Keep the piece and stop looking at this word.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-slow">
+    <h2 id="h-slow">Why that gets slow</h2>
+    <p>Every piece costs one question per word. Then the same questions come round again for the next word. The checks counter in the walk-through above is counting them.</p>
+    <p class="callout" id="slow-callout"></p>
+    <p>Most of that work is repeated. The question &ldquo;which words contain <code>na</code>?&rdquo; gets asked again every time a piece <code>na</code> turns up, and the answer never changes. The cure is to ask each question once and write the answer down.</p>
+  </section>
+
+  <section aria-labelledby="h-index">
+    <h2 id="h-index">Writing the answers down: an index</h2>
+    <p>Think of the index at the back of a book. Instead of reading every page to find where &ldquo;tea&rdquo; appears, you look up &ldquo;tea&rdquo; and get the page numbers. We can build the same thing for pieces: a table with one row per piece, listing the words that contain it.</p>
+    <p>Build it by going through the words one at a time. For each piece of the word, add the word to that piece's row. A word is added once per piece, even if the piece appears twice in it. Add the words below and watch the table grow.</p>
+    <div class="panel">
+      <div class="row">
+        <button class="btn primary" type="button" id="ix-next">Add the next word</button>
+        <button class="btn" type="button" id="ix-all">Add them all</button>
+        <button class="btn" type="button" id="ix-reset">Start again</button>
+      </div>
+      <p class="status" id="ix-info" role="status" aria-live="polite"></p>
+      <div class="ixbox"><ul class="ixlist" id="ix-rows" aria-label="The index"></ul></div>
+      <p class="note">Rows are sorted shortest piece first. Once every word is added, rows with a blue outline list exactly one word: those pieces are unique.</p>
+    </div>
+    <p>With the table built, counting matches is a lookup. Which words contain a piece? Find its row. Try one:</p>
+    <div class="panel">
+      <label class="field" for="lookup"><span class="lab">Look up a piece</span><input type="text" id="lookup" autocomplete="off" spellcheck="false" placeholder="for example: na"></label>
+      <p class="status" id="lookup-result" role="status" aria-live="polite"></p>
+    </div>
+    <p>Now the loop does not need to ask any word anything. It looks each piece up. Step through it again. The first part of the run is building the table, one word at a time. After that, every piece costs a single lookup.</p>
+    <div id="walk-index"></div>
   </section>
 
   <section aria-labelledby="h-cost">
-    <h2 id="h-cost">What it costs</h2>
-    <p>Both ways of counting give identical answers. They differ in the work they do. Scanning asks every word about every piece. The index spends effort up front, then answers each piece in one lookup. Load the <em>Trees</em> preset to see the index pull ahead. With only three short words it may not.</p>
+    <h2 id="h-cost">Scan or index?</h2>
+    <p>Neither is always better. The index pays up front, by writing a row for every piece of every word, and after that each piece costs one lookup. Scanning pays nothing up front but asks every word about every piece. With a few words the up-front cost is not worth paying. As the list grows the checks multiply and the index pulls ahead. Both always give identical answers.</p>
     <div class="costs" id="costs"></div>
     <p class="note" id="cost-note"></p>
+    <p>The chart repeats the experiment using the first 2 words of your list, then the first 3, and so on. Load the <em>Trees</em> preset at the top to see the lines cross.</p>
+    <div id="chart"></div>
   </section>
 
-  <section aria-labelledby="h-swap">
-    <h2 id="h-swap">What each swap does</h2>
-    <div class="tablewrap">
+  <section aria-labelledby="h-rules">
+    <h2 id="h-rules">Changing the rules</h2>
+    <p>The loop has three parts that can be swapped without touching the rest, and each answers a different question.</p>
+    <div class="tablewrap" style="max-height:none">
       <table>
         <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
         <tbody>
@@ -259,7 +294,44 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
         </tbody>
       </table>
     </div>
-    <p class="note">One more way to count, not built here, is a suffix array or suffix automaton. It does the work in roughly the total length of all the words, but it is harder to explain than a table.</p>
+    <p>Try them in the playground. The walk-through is the same one as before, running whichever rules you pick.</p>
+    <div class="panel">
+      <div class="field"><span class="lab" id="lab-match">How a search matches (match)</span><div class="seg" role="radiogroup" aria-labelledby="lab-match" id="seg-match"></div></div>
+      <div class="field"><span class="lab" id="lab-goal">What we are looking for (goal)</span><div class="seg" role="radiogroup" aria-labelledby="lab-goal" id="seg-goal"></div></div>
+      <div class="field"><span class="lab" id="lab-counter">How to count matches (counter)</span><div class="seg" role="radiogroup" aria-labelledby="lab-counter" id="seg-counter"></div></div>
+      <p class="blurb" id="blurb-match"></p>
+      <p class="blurb" id="blurb-goal"></p>
+      <p class="blurb" id="blurb-counter"></p>
+    </div>
+    <div id="walk-play"></div>
+    <p class="note" id="play-cost"></p>
+    <h3>Things to try</h3>
+    <ul class="try">
+      <li>Pick <em>Starts with</em>. Identifiers now have to be prefixes, like short git hashes, and they get longer.</li>
+      <li>Pick <em>Letters in order</em>. Gaps are allowed, the way a fuzzy finder matches. Answers get shorter, and a word can lose its answer completely: with the <em>Bananas</em> preset, <code>banana</code> has none, because every ordered selection of its letters is also in <code>bandana</code>.</li>
+      <li>Load <em>Nested</em>. Some words contain no piece that another word lacks, so they get no identifier at all.</li>
+      <li>Set the goal to <em>Every word</em>. The loop now looks for the longest text all the words share. Load <em>DNA</em> to see a tie: two pieces are equally long, and each word keeps the first one it meets, so the answers differ.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-sort">
+    <h2 id="h-sort">A third way: sort the endings</h2>
+    <p>There is another approach that does not try pieces at all. List every ending of every word (<code>banana</code> gives <code>banana</code>, <code>anana</code>, <code>nana</code>, <code>ana</code>, <code>na</code>, <code>a</code>), then sort the whole list alphabetically. Endings that start with the same letters end up next to each other. A piece appears in two different words only if some ending of each starts with it, and those endings sit side by side.</p>
+    <p>So for each ending, look at the nearest ending from a different word, above and below. Count how many letters they share at the start. The piece must be one letter longer than that to be ours alone. The shortest such piece across all of a word's endings is its answer. The table works this out for your words with the rules fixed at <em>contains</em> and <em>only this word</em>.</p>
+    <div class="tablewrap"><table id="sort-table"></table></div>
+    <p class="note" id="sort-note"></p>
+    <p class="note">This does the work in roughly the time it takes to sort, so it scales far better than either method above. It is harder to explain than a table, which is why it comes last.</p>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>A short identifier is the first piece, shortest first, that no other word contains.</li>
+      <li>Scanning asks every word about every piece. It is simple, but the work multiplies with the number of words.</li>
+      <li>An index asks each question once and writes the answer down. It costs more up front and one lookup per piece after that.</li>
+      <li>Swapping how a search matches, or what you want from the matches, changes the answers without changing the loop.</li>
+      <li>Sorting the endings reaches the same answers without trying pieces at all.</li>
+    </ul>
   </section>
 
   <footer>
@@ -270,8 +342,16 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
 <script>
 (() => {
   const MAX_WORDS = 12, MAX_LEN = 10;
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-  /* ---------- small helpers (shown in the Helpers panel) ---------- */
+  /* ---------- small helpers (shown in the playground) ---------- */
   const span = (start, length) => {
     return Array.from({ length }, (_, k) => start + k);
   };
@@ -415,7 +495,7 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     ['Trees', 'maple birch cedar aspen elm oak pine spruce willow hazel alder poplar']
   ];
 
-  /* ---------- running a session ---------- */
+  /* ---------- running the loop ---------- */
   function parseWords(text) {
     const seen = new Set(), out = [];
     let trimmed = false;
@@ -429,7 +509,6 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     }
     return { words: out, trimmed };
   }
-
   function makeRun(words, matchKey, goalKey, counterKey) {
     const match = MATCHES[matchKey], goal = GOALS[goalKey];
     const cost = { finds: 0, built: 0, lookups: 0, tried: 0 };
@@ -438,15 +517,13 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
       find: (text, other) => { cost.finds++; return match.find(text, other); },
       candidates: function* (word, order) { for (const c of match.candidates(word, order)) { cost.built++; yield c; } }
     };
-    const counter = (ws, m) => {
+    const counter = (ws) => {
       const raw = COUNTERS[counterKey].make(ws, counted);
       return (candidate) => { cost.lookups++; return raw(candidate); };
     };
     return { gen: identify(words, { match, goal, counter }), cost };
   }
-  function workOf(cost, counterKey) {
-    return counterKey === 'scan' ? cost.finds : cost.built + cost.lookups;
-  }
+  const workOf = (cost, counterKey) => (counterKey === 'scan' ? cost.finds : cost.built + cost.lookups);
   function runToEnd(words, matchKey, goalKey, counterKey) {
     const { gen, cost } = makeRun(words, matchKey, goalKey, counterKey);
     const answers = [];
@@ -455,50 +532,11 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     }
     return { cost, answers, work: workOf(cost, counterKey) };
   }
-
-  /* ---------- state and view ---------- */
-  const $ = (id) => document.getElementById(id);
-  let matchKey = 'contains', goalKey = 'unique', counterKey = 'scan';
-  let words = [], run, state;
-
-  function startSession() {
-    const parsed = parseWords($('words').value);
-    words = parsed.words;
-    $('trim').hidden = !parsed.trimmed;
-    $('trim').textContent = parsed.trimmed ? 'Some words were shortened or left out to keep the page quick.' : '';
-    run = makeRun(words, matchKey, goalKey, counterKey);
-    state = { cur: -1, candidate: null, hits: [], ok: false, results: new Array(words.length).fill(undefined), done: words.length === 0, tried: 0, finishedWord: -1 };
-    acc = 0;
-  }
-  function step() {
-    if (state.done) return;
-    const r = run.gen.next();
-    if (r.done) { state.done = true; return; }
-    const v = r.value;
-    state.cur = v.i;
-    if (v.finished) {
-      state.results[v.i] = v.best;
-      state.candidate = null;
-      state.finishedWord = v.i;
-      if (v.i === words.length - 1) state.done = true;
-    } else {
-      state.candidate = v.candidate; state.hits = v.hits; state.ok = v.ok;
-      state.tried++; run.cost.tried = state.tried; state.finishedWord = -1;
-    }
-  }
-
-  function tile(letter, cls) {
-    const s = document.createElement('span');
-    s.className = 't' + (cls ? ' ' + cls : '');
-    s.textContent = letter;
-    s.setAttribute('aria-hidden', 'true');
-    return s;
-  }
-  function sharedPieces() {
+  function sharedPieces(cfg, results, words) {
     // every piece of the longest length that all words have (for the Every word goal)
-    const match = MATCHES[matchKey];
-    const found = state.results.filter(Boolean);
-    if (found.length !== words.length) return null;
+    const match = MATCHES[cfg.match];
+    const found = results.filter(Boolean);
+    if (!words.length || found.length !== words.length) return null;
     const longest = Math.max(...found.map((c) => c.text.length));
     const tied = [];
     for (const c of match.candidates(words[0], 'longest')) {
@@ -507,72 +545,42 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     }
     return tied;
   }
-  function doneMessage() {
-    if (goalKey !== 'common') return 'All done. Every word now has its answer, or none if it has no piece of its own.';
-    const tied = sharedPieces();
+  function doneMessage(cfg, results, words) {
+    if (cfg.goal !== 'common') return 'All done. Every word now has its answer, or none if it has no piece of its own.';
+    const tied = sharedPieces(cfg, results, words);
     if (!tied || !tied.length) return 'All done. No piece is shared by every word.';
-    if (tied.length === 1) return 'All done. The longest shared piece is \u201c' + tied[0] + '\u201d.';
-    const shown = tied.slice(0, 8).join(', ') + (tied.length > 8 ? ', \u2026' : '');
+    if (tied.length === 1) return 'All done. The longest shared piece is “' + tied[0] + '”.';
+    const shown = tied.slice(0, 8).join(', ') + (tied.length > 8 ? ', …' : '');
     return 'All done. ' + tied.length + ' pieces tie for longest, at ' + tied[0].length + ' letters: ' + shown + '. Each word keeps the first one it meets, so the answers can differ.';
   }
-  function draw() {
-    const rows = $('rows');
-    rows.textContent = '';
-    const match = MATCHES[matchKey];
-    words.forEach((word, j) => {
-      const row = document.createElement('div');
-      row.className = 'wrow';
-      row.setAttribute('role', 'group');
-      const res = state.results[j];
-      row.setAttribute('aria-label', word + (res === undefined ? '' : (res ? ': identifier ' + res.text : ': no identifier')));
-      let marks = null, kind = '';
-      if (state.candidate && state.cur >= 0) {
-        if (j === state.cur) { row.classList.add('cur'); marks = state.candidate.at; kind = 'cand'; }
-        else if (state.hits.includes(j)) { marks = match.find(state.candidate.text, word); kind = 'hit'; }
-        else row.classList.add('dim');
-      } else if (j === state.cur) row.classList.add('cur');
-      const idx = document.createElement('span');
-      idx.className = 'idx'; idx.textContent = String(j + 1);
-      const tiles = document.createElement('div');
-      tiles.className = 'tiles';
-      [...word].forEach((letter, k) => {
-        let cls = '';
-        if (marks && marks.includes(k)) cls = kind;
-        else if (res && res.at.includes(k)) cls = 'res';
-        tiles.appendChild(tile(letter, cls));
-      });
-      const chip = document.createElement('span');
-      if (res !== undefined) { chip.className = 'chip' + (res ? ' found' : ''); chip.textContent = res ? res.text : 'none'; }
-      else if (j === state.cur && state.candidate) { chip.className = 'chip trying'; chip.textContent = state.candidate.text; }
-      else { chip.className = 'chip'; chip.textContent = '…'; }
-      row.append(idx, tiles, chip);
-      rows.appendChild(row);
-    });
-    if (!words.length) rows.textContent = 'Type at least one word above.';
 
-    const goal = GOALS[goalKey];
-    let msg;
-    if (!words.length) msg = '';
-    else if (state.done) msg = doneMessage();
-    else if (state.candidate) {
-      const n = state.hits.length;
-      msg = (counterKey === 'index' && state.tried === 1 ? 'Built an index of ' + run.cost.built + ' entries first. ' : '') +
-        'Word ' + (state.cur + 1) + ' of ' + words.length + ' (' + words[state.cur] + '). The piece “' + state.candidate.text + '” is in ' +
-        n + ' of ' + words.length + ' word' + (words.length === 1 ? '' : 's') + '. ' + (state.ok ? goal.yes : goal.no);
-    } else if (state.finishedWord >= 0) {
-      const r = state.results[state.finishedWord];
-      msg = words[state.finishedWord] + (r ? ' is identified by “' + r.text + '”.' : ' has no piece that fits, so it gets no answer.');
-    } else msg = 'Press Step or Play to begin.';
-    $('status').textContent = msg;
-
-    $('r-tried').textContent = state.tried;
-    const c = run.cost;
-    $('r-work-k').textContent = counterKey === 'scan' ? 'Word checks so far' : 'Index entries + lookups so far';
-    $('r-work').textContent = counterKey === 'scan' ? String(c.finds) : c.built + ' + ' + c.lookups;
+  /* ---------- shared state: the words ---------- */
+  const G = { words: [] };
+  const listeners = [];
+  function setWords(text) {
+    const p = parseWords(text);
+    G.words = p.words;
+    $('trim').hidden = !p.trimmed;
+    $('trim').textContent = p.trimmed ? 'Some words were shortened or left out to keep the page quick.' : '';
+    listeners.forEach((f) => f());
   }
+  const onWords = (f) => listeners.push(f);
 
-  /* ---------- code panels ---------- */
-  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function makeTiles(word, marks, kind, res) {
+    const tiles = el('div', 'tiles');
+    [...word].forEach((letter, k) => {
+      let cls = '';
+      if (marks && marks.includes(k)) cls = kind;
+      else if (res && res.at.includes(k)) cls = 'res';
+      const t = el('span', 't' + (cls ? ' ' + cls : ''), letter);
+      t.setAttribute('aria-hidden', 'true');
+      tiles.appendChild(t);
+    });
+    return tiles;
+  }
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+
+  /* ---------- code display ---------- */
   function dedent(src) {
     const lines = src.split('\n');
     if (lines.length < 2) return src;
@@ -581,111 +589,506 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
   }
   const KW = /\b(function|const|let|return|for|of|if|continue|break|while|yield|new|null)\b/g;
-  function codeBlock(src, slotTest) {
-    const pre = document.createElement('pre');
-    pre.className = 'code';
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
     pre.innerHTML = src.split('\n').map((line) => {
       const i = line.indexOf('//');
       const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
       const html = esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '');
-      return '<span class="ln' + (slotTest && slotTest.test(line) ? ' slot' : '') + '">' + (html || ' ') + '</span>';
+      return '<span class="ln">' + (html || ' ') + '</span>';
     }).join('');
     return pre;
   }
+  function setActive(pre, re) {
+    for (const ln of pre.children) ln.classList.toggle('active', !!re && re.test(ln.textContent));
+  }
   function fnPanel(name, tag, src) {
-    const d = document.createElement('div');
-    d.className = 'fn';
+    const d = el('div', 'fn');
     d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="tag">' + esc(tag) + '</span></header>';
-    d.appendChild(codeBlock(src));
-    return d;
+    const pre = codeBlock(src);
+    d.appendChild(pre);
+    return { box: d, pre };
   }
-  function renderPanels() {
-    const m = MATCHES[matchKey], g = GOALS[goalKey], c = COUNTERS[counterKey];
-    $('blurb-match').textContent = m.name + ': ' + m.blurb;
-    $('blurb-goal').textContent = g.name + ': ' + g.blurb;
-    $('blurb-counter').textContent = c.name + ': ' + c.blurb;
-    const box = $('fn-panel');
-    box.textContent = '';
-    box.appendChild(fnPanel('match.candidates', 'changes with match', dedent(m.candidates.toString())));
-    box.appendChild(fnPanel('match.find', 'changes with match', dedent(m.find.toString())));
-    box.appendChild(fnPanel('goal', 'changes with goal', '{ order: \'' + g.order + '\', accept: ' + g.accept.toString() + ' }'));
-    box.appendChild(fnPanel('counter', 'changes with counter', 'counter = ' + dedent(c.make.toString())));
-    const h = $('helper-panel');
-    h.textContent = '';
-    [['span', span], ['lengths', lengths], ['combinations', combinations]].forEach(([n, f]) => h.appendChild(fnPanel(n, '', n + ' = ' + dedent(f.toString()))));
+
+  /* ---------- the walk-through widget ---------- */
+  const SPEEDS = [1, 2, 4, 8, 16, 40, 120];
+  const ID_LINES = {
+    build: /counter\(words, match\)/, try: /for \(const candidate/, ask: /count\(candidate\)/, lookup: /count\(candidate\)/,
+    judge: /goal\.accept/, keep: /if \(ok\)/, finish: /finished: true/
+  };
+  const COUNTER_LINES = {
+    scan: { ask: /match\.find/ },
+    index: { build: /words\.forEach|for \(const piece|table\.(has|set)\(piece|table\.get\(piece/, lookup: /return table\.get\(candidate/ }
+  };
+
+  function makeWalk(root, { getCfg, full }) {
+    root.innerHTML =
+      '<div class="bench"><div class="stage"><div class="panel">' +
+      '<div class="words" data-rows></div>' +
+      '<div class="swatches" aria-hidden="true">' +
+      '<span><i style="background:var(--accent);border-color:var(--accent)"></i>Piece being tried</span>' +
+      '<span><i style="background:var(--hit);border-color:var(--hit)"></i>Where it matches</span>' +
+      '<span><i style="border-bottom:5px solid var(--accent)"></i>Answer found</span></div>' +
+      '<div class="status" role="status" aria-live="polite" data-status></div>' +
+      '<div class="readout"><div><span class="k">Pieces tried</span><span class="v" data-tried>0</span></div>' +
+      '<div><span class="k" data-work-k>Work so far</span><span class="v" data-work>0</span></div></div>' +
+      '<div class="row">' +
+      '<button class="btn" type="button" data-a="step">Step</button>' +
+      '<button class="btn" type="button" data-a="piece">Next piece</button>' +
+      '<button class="btn primary" type="button" data-a="play">Play</button>' +
+      '<button class="btn" type="button" data-a="finish">Finish</button>' +
+      '<button class="btn" type="button" data-a="restart">Restart</button>' +
+      '<label class="field"><span class="lab">Speed</span><input type="range" min="0" max="6" value="3" data-a="speed"></label>' +
+      '</div></div></div><div class="side" data-side></div></div>';
+    const q = (s) => root.querySelector(s);
+    const rowsEl = q('[data-rows]'), statusEl = q('[data-status]'), side = q('[data-side]');
+    let cfg, words, run, st, queue, idPre, cntPre, playing = false, acc = 0, lastT = 0;
+
+    function buildPanels() {
+      side.textContent = '';
+      const m = MATCHES[cfg.match], g = GOALS[cfg.goal], c = COUNTERS[cfg.counter];
+      const id = fnPanel('identify', 'the loop', dedent(identify.toString()));
+      idPre = id.pre; side.appendChild(id.box);
+      const cn = fnPanel('counter', cfg.counter === 'scan' ? 'scan every word' : 'build an index first', 'counter = ' + dedent(c.make.toString()));
+      cntPre = cn.pre; side.appendChild(cn.box);
+      if (full) {
+        side.appendChild(fnPanel('match.candidates', 'changes with match', dedent(m.candidates.toString())).box);
+        side.appendChild(fnPanel('match.find', 'changes with match', dedent(m.find.toString())).box);
+        side.appendChild(fnPanel('goal', 'changes with goal', '{ order: \'' + g.order + '\', accept: ' + g.accept.toString() + ' }').box);
+        const det = el('details');
+        det.innerHTML = '<summary>Small helpers the code uses</summary>';
+        const stack = el('div', 'stack');
+        [['span', span], ['lengths', lengths], ['combinations', combinations]].forEach(([n, f]) => stack.appendChild(fnPanel(n, '', n + ' = ' + dedent(f.toString())).box));
+        det.appendChild(stack); side.appendChild(det);
+      }
+    }
+    function buildEvents() {
+      // replay of the index being built, one word at a time (for display only)
+      const match = MATCHES[cfg.match], evs = [], seen = new Set();
+      words.forEach((word, j) => {
+        let n = 0;
+        for (const p of match.candidates(word, 'shortest')) { n++; seen.add(p.text); }
+        evs.push({ phase: 'build', j, entries: n });
+      });
+      return evs;
+    }
+    function reset(advance) {
+      playing = false; acc = 0;
+      q('[data-a="play"]').textContent = 'Play';
+      cfg = getCfg(); words = G.words;
+      run = makeRun(words, cfg.match, cfg.goal, cfg.counter);
+      st = { cur: -1, candidate: null, checked: new Map(), lookup: null, judge: null, kept: false, results: new Array(words.length).fill(undefined),
+        done: !words.length, phase: 'idle', tried: 0, checks: 0, lookups: 0, built: 0, entryCounts: [], asking: -1 };
+      queue = cfg.counter === 'index' ? buildEvents() : [];
+      buildPanels();
+      for (let i = 0; i < (advance || 0); i++) step();
+      draw();
+    }
+    function nextEvent() {
+      if (queue.length) return queue.shift();
+      const r = run.gen.next();
+      if (r.done) return null;
+      const v = r.value;
+      if (v.finished) return { phase: 'finish', i: v.i, best: v.best };
+      const evs = [{ phase: 'try', i: v.i, candidate: v.candidate }];
+      if (cfg.counter === 'scan') words.forEach((_, j) => evs.push({ phase: 'ask', j, found: v.hits.includes(j) }));
+      else evs.push({ phase: 'lookup', hits: v.hits });
+      evs.push({ phase: 'judge', ok: v.ok, n: v.hits.length });
+      if (v.ok) evs.push({ phase: 'keep' });
+      queue.push(...evs.slice(1));
+      return evs[0];
+    }
+    function step() {
+      if (st.done) return;
+      const ev = nextEvent();
+      if (!ev) { st.done = true; return; }
+      st.phase = ev.phase; st.ev = ev;
+      switch (ev.phase) {
+        case 'build': st.built += ev.entries; st.entryCounts[ev.j] = ev.entries; st.cur = ev.j; st.candidate = null; break;
+        case 'try': st.cur = ev.i; st.candidate = ev.candidate; st.checked = new Map(); st.lookup = null; st.judge = null; st.kept = false; st.tried++; st.asking = -1; break;
+        case 'ask': st.checked.set(ev.j, ev.found); st.checks++; st.asking = ev.j; break;
+        case 'lookup': st.lookup = ev.hits; st.lookups++; break;
+        case 'judge': st.judge = { ok: ev.ok, n: ev.n }; break;
+        case 'keep': st.kept = true; break;
+        case 'finish':
+          st.results[ev.i] = ev.best; st.candidate = null; st.checked = new Map(); st.lookup = null; st.judge = null; st.cur = ev.i; st.asking = -1;
+          if (ev.i === words.length - 1) st.done = true;
+          break;
+      }
+    }
+    function message() {
+      if (!words.length) return 'Type at least one word at the top of the page.';
+      const g = GOALS[cfg.goal], ev = st.ev, N = words.length;
+      const text = st.candidate ? '“' + st.candidate.text + '”' : '';
+      if (st.done) return doneMessage(cfg, st.results, words);
+      switch (st.phase) {
+        case 'idle': return 'Press Step to begin, or Play to watch it run.';
+        case 'build': return 'Building the index. ' + words[ev.j] + ' adds ' + plural(ev.entries, 'piece', 'pieces') + ' (' + st.built + ' entries so far).';
+        case 'try': return 'Word ' + (st.cur + 1) + ' of ' + N + ' (' + words[st.cur] + '). Try the piece ' + text + '.';
+        case 'ask': return 'Does ' + words[ev.j] + ' contain ' + text + '? ' + (ev.found ? 'Yes.' : 'No.');
+        case 'lookup': return 'Look up ' + text + ' in the index. Its row lists ' + plural(ev.hits.length, 'word', 'words') + (ev.hits.length ? ': ' + ev.hits.map((j) => words[j]).join(', ') : '') + '.';
+        case 'judge': return text + ' is in ' + ev.n + ' of ' + N + ' words. ' + (ev.ok ? g.yes : g.no);
+        case 'keep': return 'Keep ' + text + ' as the answer for ' + words[st.cur] + '.';
+        case 'finish': return words[ev.i] + (ev.best ? ' is identified by “' + ev.best.text + '”.' : ' has no piece that fits, so it gets no answer.');
+      }
+      return '';
+    }
+    function draw() {
+      const match = MATCHES[cfg.match];
+      rowsEl.textContent = '';
+      words.forEach((word, j) => {
+        const row = el('div', 'wrow');
+        row.setAttribute('role', 'group');
+        const res = st.results[j];
+        row.setAttribute('aria-label', word + (res === undefined ? '' : (res ? ': identifier ' + res.text : ': no identifier')));
+        if (j === st.cur && !st.done) row.classList.add('cur');
+        let marks = null, kind = '', verdict = null;
+        if (st.candidate) {
+          if (j === st.cur) { marks = st.candidate.at; kind = 'cand'; }
+          if (cfg.counter === 'scan') {
+            if (st.checked.has(j)) {
+              verdict = st.checked.get(j);
+              if (j !== st.cur) { if (verdict) { marks = match.find(st.candidate.text, word); kind = 'hit'; } else row.classList.add('dim'); }
+            }
+          } else if (st.lookup) {
+            verdict = st.lookup.includes(j);
+            if (j !== st.cur) { if (verdict) { marks = match.find(st.candidate.text, word); kind = 'hit'; } else row.classList.add('dim'); }
+          }
+        }
+        const chip = el('span', 'chip');
+        if (res !== undefined) { chip.classList.add(res ? 'found' : 'x'); chip.textContent = res ? res.text : 'none'; }
+        else if (st.phase === 'build' || (cfg.counter === 'index' && st.entryCounts[j] != null && !st.candidate)) { chip.textContent = st.entryCounts[j] != null ? '+' + st.entryCounts[j] : '…'; }
+        else if (verdict !== null) { chip.classList.add('yes'); chip.textContent = verdict ? 'yes' : 'no'; }
+        else if (st.candidate && j === st.cur) { chip.classList.add('trying'); chip.textContent = st.candidate.text; }
+        else chip.textContent = '…';
+        const idx = el('span', 'idx', String(j + 1));
+        row.append(idx, makeTiles(word, marks, kind, res), chip);
+        rowsEl.appendChild(row);
+      });
+      if (!words.length) rowsEl.textContent = 'Type at least one word at the top of the page.';
+      statusEl.textContent = message();
+      q('[data-tried]').textContent = st.tried;
+      q('[data-work-k]').textContent = cfg.counter === 'scan' ? 'Word checks so far' : 'Entries built + lookups so far';
+      q('[data-work]').textContent = cfg.counter === 'scan' ? String(st.checks) : st.built + ' + ' + st.lookups;
+      setActive(idPre, st.done ? null : ID_LINES[st.phase]);
+      setActive(cntPre, st.done ? null : (COUNTER_LINES[cfg.counter] || {})[st.phase]);
+    }
+    function setPlaying(on) {
+      playing = on && !st.done;
+      q('[data-a="play"]').textContent = playing ? 'Pause' : 'Play';
+      if (playing) { lastT = performance.now(); requestAnimationFrame(tick); }
+    }
+    function tick(t) {
+      if (!playing) return;
+      acc += Math.min(0.1, (t - lastT) / 1000) * SPEEDS[+q('[data-a="speed"]').value];
+      lastT = t;
+      let n = Math.floor(acc); acc -= n;
+      while (n-- > 0 && !st.done) step();
+      draw();
+      if (st.done) setPlaying(false); else requestAnimationFrame(tick);
+    }
+    q('[data-a="step"]').addEventListener('click', () => { setPlaying(false); step(); draw(); });
+    q('[data-a="piece"]').addEventListener('click', () => { setPlaying(false); step(); let g = 0; while (!st.done && st.phase !== 'try' && st.phase !== 'finish' && g++ < 100000) step(); draw(); });
+    q('[data-a="play"]').addEventListener('click', () => { if (st.done) reset(0); setPlaying(!playing); });
+    q('[data-a="finish"]').addEventListener('click', () => { setPlaying(false); let g = 0; while (!st.done && g++ < 800000) step(); draw(); });
+    q('[data-a="restart"]').addEventListener('click', () => reset(0));
+    reset(8);
+    return { reset: () => reset(8), state: () => st, cfg: () => cfg };
   }
-  (function () {
-    const block = codeBlock(dedent(identify.toString()), /match\.candidates|counter\(|goal\.accept|goal\.order/);
-    $('loop-code').innerHTML = block.innerHTML;
+
+  /* ---------- section: try it by hand ---------- */
+  (function probe() {
+    const input = $('probe'), rows = $('probe-rows'), status = $('probe-status'), btn = $('probe-reveal'), out = $('probe-answers');
+    let shown = false;
+    function draw() {
+      const qy = input.value.trim().toLowerCase();
+      rows.textContent = '';
+      let n = 0, only = -1;
+      G.words.forEach((w, j) => {
+        const i = qy ? w.indexOf(qy) : -1;
+        if (i >= 0) { n++; only = j; }
+        const row = el('div', 'wrow' + (qy && i < 0 ? ' dim' : ''));
+        row.setAttribute('role', 'group');
+        row.setAttribute('aria-label', w + (i >= 0 ? ': contains ' + qy : ''));
+        row.append(el('span', 'idx', String(j + 1)), makeTiles(w, i >= 0 ? span(i, qy.length) : null, 'hit'), el('span', 'chip' + (i >= 0 ? ' yes' : ''), i >= 0 ? 'yes' : '–'));
+        rows.appendChild(row);
+      });
+      if (!G.words.length) status.textContent = 'Type some words above.';
+      else if (!qy) status.textContent = 'Type a piece of a word to see which words contain it.';
+      else if (n === 0) status.textContent = 'No word contains “' + qy + '”.';
+      else if (n === 1) status.textContent = 'Only ' + G.words[only] + ' contains “' + qy + '”. That is ' + plural(qy.length, 'letter', 'letters') + ' to pick it out.';
+      else status.textContent = n + ' of ' + G.words.length + ' words contain “' + qy + '”.';
+      out.hidden = !shown;
+      btn.textContent = shown ? 'Hide the answers' : 'Show the shortest piece for every word';
+      out.textContent = '';
+      if (shown) {
+        const res = runToEnd(G.words, 'contains', 'unique', 'scan').answers;
+        const ul = el('ul', 'try');
+        G.words.forEach((w, j) => ul.appendChild(el('li', null, w + (res[j] ? ': “' + res[j] + '” (' + plural(res[j].length, 'letter', 'letters') + ')' : ': none, because every piece of it is also in another word'))));
+        out.appendChild(ul);
+      }
+    }
+    input.addEventListener('input', draw);
+    btn.addEventListener('click', () => { shown = !shown; draw(); });
+    onWords(draw);
   })();
 
-  /* ---------- cost comparison ---------- */
-  function renderCosts() {
+  /* ---------- section: pieces of a word ---------- */
+  (function pieces() {
+    let sel = 0;
+    const picker = $('pick-word'), grid = $('pieces'), sum = $('pieces-sum');
+    function allPieces(word) {
+      const out = [], seen = new Set();
+      for (let len = 1; len <= word.length; len++) {
+        for (let start = 0; start + len <= word.length; start++) {
+          const text = word.slice(start, start + len);
+          out.push({ text, len, repeat: seen.has(text) });
+          seen.add(text);
+        }
+      }
+      return out;
+    }
+    function buildPicker() {
+      picker.textContent = '';
+      if (sel >= G.words.length) sel = 0;
+      G.words.forEach((w, j) => {
+        const input = el('input'); input.type = 'radio'; input.name = 'pword'; input.id = 'pword-' + j; input.value = String(j); input.checked = j === sel;
+        const label = el('label', null, w); label.htmlFor = 'pword-' + j;
+        picker.append(input, label);
+      });
+    }
+    function drawGrid() {
+      grid.textContent = '';
+      const w = G.words[sel];
+      if (!w) { sum.textContent = 'Type some words at the top of the page.'; return; }
+      const pcs = allPieces(w);
+      const count = (t) => G.words.filter((x) => x.includes(t)).length;
+      const firstUnique = pcs.find((p) => !p.repeat && count(p.text) === 1);
+      let distinct = 0, nUniq = 0;
+      for (let len = 1; len <= w.length; len++) {
+        const group = el('div', 'plen');
+        group.appendChild(el('span', 'len', plural(len, 'letter', 'letters')));
+        pcs.filter((p) => p.len === len).forEach((p) => {
+          const c = count(p.text);
+          if (!p.repeat) { distinct++; if (c === 1) nUniq++; }
+          const chip = el('span', 'pc' + (p.repeat ? ' repeat' : '') + (!p.repeat && c === 1 ? ' uniq' : '') + (p === firstUnique ? ' pick' : ''));
+          chip.setAttribute('aria-label', p.text + ', in ' + plural(c, 'word', 'words') + (p.repeat ? ', a repeat' : '') + (p === firstUnique ? ', the answer' : ''));
+          chip.append(el('b', null, p.text), el('i', null, String(c)));
+          group.appendChild(chip);
+        });
+        grid.appendChild(group);
+      }
+      sum.textContent = w + ' has ' + pcs.length + ' pieces (' + w.length + ' × ' + (w.length + 1) + ' ÷ 2), ' + distinct + ' of them different. ' +
+        nUniq + (nUniq === 1 ? ' is' : ' are') + ' in no other word. ' +
+        (firstUnique ? 'The first of those, shortest and then leftmost, is “' + firstUnique.text + '”, so that is the answer.' : 'Because none is, this word gets no answer.');
+    }
+    picker.addEventListener('change', (e) => { sel = +e.target.value; drawGrid(); });
+    onWords(() => { buildPicker(); drawGrid(); });
+  })();
+
+  /* ---------- section: why it gets slow ---------- */
+  function drawSlow() {
+    const box = $('slow-callout');
+    if (!G.words.length) { box.textContent = ''; return; }
+    const r = runToEnd(G.words, 'contains', 'unique', 'scan');
+    box.textContent = 'With your ' + G.words.length + ' words, the plain method tried ' + r.cost.tried + ' pieces and made ' + r.cost.finds + ' word checks to answer them. Each of those is a question some word had already answered for an earlier piece or an earlier word.';
+  }
+
+  /* ---------- section: the index ---------- */
+  const lookupEl = $('lookup');
+  let ixAdded = 0;
+  function ixTable() {
+    const table = new Map();
+    for (let j = 0; j < ixAdded; j++) {
+      for (const p of MATCHES.contains.candidates(G.words[j], 'shortest')) {
+        if (!table.has(p.text)) table.set(p.text, []);
+        table.get(p.text).push(j);
+      }
+    }
+    return table;
+  }
+  function drawIndex() {
+    const N = G.words.length;
+    ixAdded = Math.min(ixAdded, N);
+    const table = ixTable();
+    const rows = [...table.entries()].sort(([a], [b]) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0));
+    const list = $('ix-rows');
+    list.textContent = '';
+    const CAP = 400;
+    rows.slice(0, CAP).forEach(([text, ws]) => {
+      const li = el('li', 'ix' + (ixAdded === N && ws.length === 1 ? ' only' : ''));
+      li.appendChild(el('b', null, text));
+      ws.forEach((j) => li.appendChild(el('span', 'w', G.words[j])));
+      list.appendChild(li);
+    });
+    if (rows.length > CAP) list.appendChild(el('li', 'note', '… and ' + (rows.length - CAP) + ' more rows'));
+    const only = rows.filter(([, ws]) => ws.length === 1).length;
+    $('ix-info').textContent = !N ? 'Type some words at the top of the page.' :
+      (ixAdded === 0 ? 'The table is empty. Add the first word.' :
+        ixAdded + ' of ' + N + ' words added' + (ixAdded ? ': ' + G.words.slice(0, ixAdded).join(', ') : '') + '. The table has ' + rows.length + ' rows.' +
+        (ixAdded === N ? ' ' + only + (only === 1 ? ' row lists' : ' rows list') + ' exactly one word.' : ''));
+    $('ix-next').disabled = ixAdded >= N;
+    $('ix-all').disabled = ixAdded >= N;
+    drawLookup(table);
+  }
+  function drawLookup(table) {
+    const qy = lookupEl.value.trim().toLowerCase(), out = $('lookup-result');
+    if (!qy) { out.textContent = 'Type a piece, such as na, to see its row.'; return; }
+    const row = (table || ixTable()).get(qy);
+    if (!row) out.textContent = 'There is no row for “' + qy + '”' + (ixAdded < G.words.length ? ' yet. Add more words, or it may not be a piece of any word.' : ': no word contains it.');
+    else out.textContent = '“' + qy + '” is in ' + plural(row.length, 'word', 'words') + ': ' + row.map((j) => G.words[j]).join(', ') + '. ' + (row.length === 1 ? 'Only one word, so it is unique.' : 'More than one word, so it is not unique.') + (ixAdded < G.words.length ? ' (The index is not complete yet.)' : '');
+  }
+  $('ix-next').addEventListener('click', () => { ixAdded++; drawIndex(); });
+  $('ix-all').addEventListener('click', () => { ixAdded = G.words.length; drawIndex(); });
+  $('ix-reset').addEventListener('click', () => { ixAdded = 0; drawIndex(); });
+  lookupEl.addEventListener('input', () => drawLookup());
+
+  /* ---------- section: scan or index ---------- */
+  function drawCosts() {
     const box = $('costs');
     box.textContent = '';
-    if (!words.length) { $('cost-note').textContent = ''; return; }
-    const a = runToEnd(words, matchKey, goalKey, 'scan'), b = runToEnd(words, matchKey, goalKey, 'index');
+    if (!G.words.length) { $('cost-note').textContent = ''; return; }
+    const a = runToEnd(G.words, 'contains', 'unique', 'scan'), b = runToEnd(G.words, 'contains', 'unique', 'index');
     const max = Math.max(a.work, b.work, 1);
-    const same = JSON.stringify(a.answers) === JSON.stringify(b.answers);
     [[COUNTERS.scan.name, a, a.cost.finds + ' word checks'], [COUNTERS.index.name, b, b.cost.built + ' entries built, ' + b.cost.lookups + ' lookups']].forEach(([name, r, detail]) => {
-      const d = document.createElement('div');
-      d.className = 'cost';
+      const d = el('div', 'cost');
       d.innerHTML = '<h3>' + esc(name) + '</h3><span class="big">' + r.work + '</span><div class="bar" aria-hidden="true"><i style="width:' + Math.max(2, Math.round(100 * r.work / max)) + '%"></i></div><small>' + esc(detail) + '</small>';
       box.appendChild(d);
     });
     const lower = a.work === b.work ? 'both did the same work' : (a.work < b.work ? 'scanning did less work' : 'the index did less work');
-    $('cost-note').textContent = 'For these words and settings ' + lower + '. ' + (same ? 'Both gave the same answers.' : 'The answers differed, which should not happen.') + ' Work counts word checks for the scan, and entries built plus lookups for the index.';
+    const same = JSON.stringify(a.answers) === JSON.stringify(b.answers);
+    $('cost-note').textContent = 'For your words ' + lower + '. ' + (same ? 'Both gave the same answers.' : 'The answers differed, which should not happen.') + ' Work counts word checks for the scan, and entries built plus lookups for the index.';
+  }
+  let chartTimer = 0;
+  function drawChart() {
+    clearTimeout(chartTimer);
+    chartTimer = setTimeout(() => {
+      const box = $('chart');
+      box.textContent = '';
+      const N = G.words.length;
+      if (N < 3) { box.appendChild(el('p', 'note', 'Add at least three words to see how the work grows.')); return; }
+      const pts = [];
+      for (let k = 2; k <= N; k++) {
+        const ws = G.words.slice(0, k);
+        pts.push({ k, scan: runToEnd(ws, 'contains', 'unique', 'scan').work, index: runToEnd(ws, 'contains', 'unique', 'index').work });
+      }
+      const W = 640, H = 300, l = 56, r = 20, t = 20, b = 56;
+      const rawMax = Math.max(...pts.flatMap((p) => [p.scan, p.index]));
+      const mag = Math.pow(10, Math.floor(Math.log10(rawMax)));
+      const maxY = Math.ceil(rawMax / mag) * mag;
+      const x = (k) => l + ((k - 2) / (N - 2)) * (W - l - r);
+      const y = (v) => H - b - (v / maxY) * (H - t - b);
+      const NS = 'http://www.w3.org/2000/svg';
+      const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; return e; };
+      const svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, class: 'chart', role: 'img', 'aria-label': 'Work against number of words. At ' + N + ' words scanning does ' + pts[pts.length - 1].scan + ' units of work and the index does ' + pts[pts.length - 1].index + '.' });
+      for (let i = 0; i <= 4; i++) {
+        const v = (maxY / 4) * i;
+        svg.appendChild(mk('line', { x1: l, x2: W - r, y1: y(v), y2: y(v), class: 'grid' }));
+        svg.appendChild(mk('text', { x: l - 8, y: y(v) + 4, 'text-anchor': 'end' }, String(Math.round(v))));
+      }
+      pts.forEach((p) => svg.appendChild(mk('text', { x: x(p.k), y: H - b + 18, 'text-anchor': 'middle' }, String(p.k))));
+      svg.appendChild(mk('text', { x: (l + W - r) / 2, y: H - 14, 'text-anchor': 'middle' }, 'Number of words'));
+      svg.appendChild(mk('text', { x: 14, y: (t + H - b) / 2, 'text-anchor': 'middle', transform: 'rotate(-90 14 ' + (t + H - b) / 2 + ')' }, 'Work'));
+      ['scan', 'index'].forEach((key) => {
+        svg.appendChild(mk('polyline', { class: 'l-' + key, points: pts.map((p) => x(p.k) + ',' + y(p[key])).join(' ') }));
+        pts.forEach((p) => svg.appendChild(mk('circle', { class: 'd-' + key, cx: x(p.k), cy: y(p[key]), r: 4 })));
+      });
+      svg.appendChild(mk('text', { x: l + 12, y: t + 8, 'text-anchor': 'start', style: 'fill:var(--scan);font-weight:600' }, 'Scan every word'));
+      svg.appendChild(mk('text', { x: l + 12, y: t + 26, 'text-anchor': 'start', style: 'fill:var(--accent);font-weight:600' }, 'Build an index first'));
+      box.appendChild(svg);
+    }, 30);
   }
 
-  /* ---------- controls ---------- */
+  /* ---------- section: the playground ---------- */
+  let matchKey = 'contains', goalKey = 'unique', counterKey = 'scan';
   function seg(id, name, registry, current, onPick) {
-    const el = $(id);
+    const e = $(id);
     Object.entries(registry).forEach(([key, v]) => {
-      el.insertAdjacentHTML('beforeend', '<input type="radio" name="' + name + '" id="' + name + '-' + key + '" value="' + key + '"' + (key === current ? ' checked' : '') + '><label for="' + name + '-' + key + '">' + esc(v.name) + '</label>');
+      e.insertAdjacentHTML('beforeend', '<input type="radio" name="' + name + '" id="' + name + '-' + key + '" value="' + key + '"' + (key === current ? ' checked' : '') + '><label for="' + name + '-' + key + '">' + esc(v.name) + '</label>');
     });
-    el.addEventListener('change', (e) => onPick(e.target.value));
+    e.addEventListener('change', (ev) => onPick(ev.target.value));
   }
-  function restart(keepPlaying) {
-    setPlaying(false);
-    startSession(); renderPanels(); draw(); renderCosts();
+  let playCostTimer = 0;
+  function drawPlayCost() {
+    clearTimeout(playCostTimer);
+    playCostTimer = setTimeout(() => {
+      if (!G.words.length) { $('play-cost').textContent = ''; return; }
+      const a = runToEnd(G.words, matchKey, goalKey, 'scan'), b = runToEnd(G.words, matchKey, goalKey, 'index');
+      $('play-cost').textContent = 'With these rules, scanning does ' + a.work + ' word checks and the index does ' + b.work + ' units of work (' + b.cost.built + ' entries built plus ' + b.cost.lookups + ' lookups).';
+    }, 30);
   }
-  seg('seg-match', 'match', MATCHES, matchKey, (v) => { matchKey = v; restart(); });
-  seg('seg-goal', 'goal', GOALS, goalKey, (v) => { goalKey = v; restart(); });
-  seg('seg-counter', 'counter', COUNTERS, counterKey, (v) => { counterKey = v; restart(); });
-  PRESETS.forEach(([label, text]) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'btn small'; b.textContent = label;
-    b.addEventListener('click', () => { $('words').value = text; restart(); });
-    $('presets').appendChild(b);
-  });
-  $('words').addEventListener('input', () => restart());
+  function drawBlurbs() {
+    $('blurb-match').textContent = MATCHES[matchKey].name + ': ' + MATCHES[matchKey].blurb;
+    $('blurb-goal').textContent = GOALS[goalKey].name + ': ' + GOALS[goalKey].blurb;
+    $('blurb-counter').textContent = COUNTERS[counterKey].name + ': ' + COUNTERS[counterKey].blurb;
+  }
 
-  const SPEEDS = [1, 2, 4, 8, 16, 40, 120];
-  let playing = false, lastT = 0, acc = 0;
-  function setPlaying(on) {
-    playing = on && !state.done;
-    $('b-play').textContent = playing ? 'Pause' : 'Play';
-    if (playing) { lastT = performance.now(); requestAnimationFrame(tick); }
+  /* ---------- section: sort the endings ---------- */
+  function suffixData(words) {
+    const rows = [];
+    words.forEach((w, wi) => { for (let s = 0; s < w.length; s++) rows.push({ wi, start: s, text: w.slice(s) }); });
+    rows.sort((a, b) => (a.text < b.text ? -1 : a.text > b.text ? 1 : a.wi - b.wi));
+    const lcp = (a, b) => { let k = 0; while (k < a.length && k < b.length && a[k] === b[k]) k++; return k; };
+    rows.forEach((r, i) => {
+      let shared = 0;
+      for (const d of [-1, 1]) {
+        for (let j = i + d; j >= 0 && j < rows.length; j += d) {
+          if (rows[j].wi !== r.wi) { shared = Math.max(shared, lcp(r.text, rows[j].text)); break; }
+        }
+      }
+      r.shared = shared; r.need = shared + 1; r.fits = r.need <= r.text.length;
+    });
+    const chosen = new Set();
+    const answers = words.map((w, wi) => {
+      let best = null;
+      rows.filter((r) => r.wi === wi && r.fits).forEach((r) => {
+        if (!best || r.need < best.need || (r.need === best.need && r.start < best.start)) best = r;
+      });
+      if (best) chosen.add(best);
+      return best ? best.text.slice(0, best.need) : null;
+    });
+    return { rows, answers, chosen };
   }
-  function tick(t) {
-    if (!playing) return;
-    acc += Math.min(0.1, (t - lastT) / 1000) * SPEEDS[+$('speed').value];
-    lastT = t;
-    let n = Math.floor(acc); acc -= n;
-    while (n-- > 0 && !state.done) step();
-    draw();
-    if (state.done) setPlaying(false); else requestAnimationFrame(tick);
+  function drawSort() {
+    const tbl = $('sort-table');
+    tbl.textContent = '';
+    if (!G.words.length) { $('sort-note').textContent = ''; return; }
+    const { rows, answers, chosen } = suffixData(G.words);
+    tbl.innerHTML = '<thead><tr><th>Ending, sorted</th><th>From word</th><th>Letters shared with a different word</th><th>Shortest piece of its own</th></tr></thead>';
+    const body = el('tbody');
+    rows.forEach((r) => {
+      const tr = el('tr', chosen.has(r) ? 'chosen' : '');
+      tr.append(el('td', 'mono', r.text), el('td', null, G.words[r.wi]), el('td', 'mono', String(r.shared)), el('td', 'mono', r.fits ? r.text.slice(0, r.need) : 'none'));
+      body.appendChild(tr);
+    });
+    tbl.appendChild(body);
+    const loop = runToEnd(G.words, 'contains', 'unique', 'scan').answers;
+    const same = JSON.stringify(answers) === JSON.stringify(loop);
+    $('sort-note').textContent = 'Highlighted rows are the ones each word keeps: ' + G.words.map((w, j) => w + ' → ' + (answers[j] ? '“' + answers[j] + '”' : 'none')).join(', ') + '. ' + (same ? 'These are exactly the answers the loop found.' : 'These differ from the loop, which should not happen.');
   }
-  $('b-step').addEventListener('click', () => { setPlaying(false); step(); draw(); });
-  $('b-play').addEventListener('click', () => { if (state.done) { startSession(); } setPlaying(!playing); });
-  $('b-finish').addEventListener('click', () => { setPlaying(false); let guard = 0; while (!state.done && guard++ < 200000) step(); draw(); });
-  $('b-restart').addEventListener('click', () => restart());
 
   /* ---------- start up ---------- */
+  const walkScan = makeWalk($('walk-scan'), { getCfg: () => ({ match: 'contains', goal: 'unique', counter: 'scan' }), full: false });
+  const walkIndex = makeWalk($('walk-index'), { getCfg: () => ({ match: 'contains', goal: 'unique', counter: 'index' }), full: false });
+  const walkPlay = makeWalk($('walk-play'), { getCfg: () => ({ match: matchKey, goal: goalKey, counter: counterKey }), full: true });
+  function playChanged() { drawBlurbs(); walkPlay.reset(); drawPlayCost(); }
+  seg('seg-match', 'match', MATCHES, matchKey, (v) => { matchKey = v; playChanged(); });
+  seg('seg-goal', 'goal', GOALS, goalKey, (v) => { goalKey = v; playChanged(); });
+  seg('seg-counter', 'counter', COUNTERS, counterKey, (v) => { counterKey = v; playChanged(); });
+  PRESETS.forEach(([label, text]) => {
+    const b = el('button', 'btn small', label); b.type = 'button';
+    b.addEventListener('click', () => { $('words').value = text; setWords(text); });
+    $('presets').appendChild(b);
+  });
+  let wordsTimer = 0;
+  $('words').addEventListener('input', () => { clearTimeout(wordsTimer); wordsTimer = setTimeout(() => setWords($('words').value), 150); });
+
+  onWords(() => { ixAdded = 0; });
+  onWords(drawSlow); onWords(drawIndex); onWords(drawCosts); onWords(drawChart); onWords(drawSort);
+  onWords(() => { walkScan.reset(); walkIndex.reset(); walkPlay.reset(); drawPlayCost(); });
   $('words').value = PRESETS[0][1];
-  startSession();
-  for (let i = 0; i < 6; i++) step();
-  renderPanels(); draw(); renderCosts();
+  drawBlurbs();
+  setWords($('words').value);
 })();
 </script>
 </body>
