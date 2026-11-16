@@ -17,6 +17,7 @@ Each explainer is a single standalone HTML file in its own folder, so its addres
 | [Best match first](fuzzy-finding/) | How a fuzzy finder ranks its matches: choosing which letters match, scoring them, finding the best placement with dynamic programming, and staying fast on thousands of items. Uses made-up file names only. |
 | [What changed?](what-changed/) | How a diff works: the longest common subsequence, the dynamic-programming grid filled step by step, edit distance with swaps, and trimming for large files. Uses made-up text only. |
 | [Read it backwards](boyer-moore/) | Boyer–Moore–Horspool string search: compare the pattern from its last letter, skip ahead on a mismatch, and measure how much of the text is never looked at. Uses made-up text only. |
+| [The whole paragraph](line-breaking/) | Optimal line breaking, the idea behind Knuth–Plass: greedy versus best-total breaks, and the dynamic-programming table that chooses them. Uses made-up text only. |
 
 More explainers will be added as new folders, and listed in [`index.html`](index.html).
 
