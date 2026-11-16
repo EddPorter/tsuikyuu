@@ -334,6 +334,19 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     </ul>
   </section>
 
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>This page used the simplest methods that show the ideas. These are the names to search for when the lists get bigger. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Trie</dt><dd>A tree of letters. For the <em>starts with</em> rule it gives the shortest unique prefix directly: walk down from the root and stop at the first node that only one word passes through. The index above holds the same information as a trie of every ending of every word.</dd></div>
+      <div><dt>Rolling hash and binary search</dt><dd>If a word has a unique piece of some length, it has one at every longer length up to its own, because you can extend the piece. So the shortest length can be found by binary search. At each length, hash every piece of that length in one pass (a rolling hash, as in the Rabin&ndash;Karp algorithm) and count the words each hash appears in. Hashes can collide, so a careful version checks what it finds.</dd></div>
+      <div><dt>Aho&ndash;Corasick</dt><dd>Matches many patterns against a text in a single pass. Loading all the candidate pieces into one such automaton would let the scan method ask all of its questions about a word at once.</dd></div>
+      <div><dt>Suffix array and LCP array</dt><dd>The sorted-endings table is this idea. The sorted list is a suffix array, and the shared-letters column is the LCP array. Both can be built in time proportional to the total length of the words (SA-IS and Kasai's algorithm are the usual names), which is why real tools use them.</dd></div>
+      <div><dt>Suffix tree and suffix automaton</dt><dd>The same information held as a tree or an automaton, again in linear time (Ukkonen's algorithm builds a suffix tree). The generalised versions handle many words at once. They also find the longest text all the words share, which is the <em>Every word</em> goal, far faster than the brute force here. The research name for counting how many different words contain a piece is <em>document counting</em>.</dd></div>
+      <div><dt>FM-index, k-mers and Bloom filters</dt><dd>Compressed or approximate versions of these ideas for inputs as big as genomes: the Burrows&ndash;Wheeler transform and the FM-index, counting fixed-length pieces called k-mers, and Bloom filters for approximate membership. Finding stretches of DNA that occur only once matters when designing primers, so the DNA preset is closer to real use than it looks.</dd></div>
+    </dl>
+  </section>
+
   <footer>
     <p>The loop comes from a small C++ program, ShortestUniqueIdentifier. This page runs a JavaScript port of it.</p>
   </footer>
