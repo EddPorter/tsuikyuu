@@ -13,6 +13,7 @@ Each explainer is a single standalone HTML file in its own folder, so its addres
 | [One loop, many searches](one-loop-many-searches/) | Breadth-first, depth-first, cheapest-first (Dijkstra), greedy and A* are one search loop with a different `removeChoice` function. Paint walls and mud on a map and watch each strategy run. |
 | [Just enough letters](shortest-unique-identifiers/) | The fewest letters that pick out one word from a list. Swap how a search matches (contains, starts with, letters in order), what you are looking for, and how matches are counted, then watch the answers and the work change. |
 | [Shared beginnings](tries/) | Tries: a tree that stores each shared beginning once. Build one letter by letter, look words up, count what it saves, then squash it into a suffix tree. |
+| [Nearly the same](fuzzy-hashing/) | Fuzzy hashing: why an ordinary hash cannot spot near-copies of a message, and how shingles, MinHash and banding find a whole mailing campaign without comparing every pair. Uses made-up messages only. |
 
 More explainers will be added as new folders, and listed in [`index.html`](index.html).
 
