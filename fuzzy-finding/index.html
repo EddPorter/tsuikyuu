@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Best Match First</title>
+<meta name="description" content="An interactive explainer of how a fuzzy finder ranks its matches: choosing which letters match, scoring them with bonuses and penalties, finding the best alignment with dynamic programming, and staying fast on a list of thousands.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: a single reading column that builds the idea in stages. Each stage ends in a small workbench you can poke. */
+:root {
+  --bg: #eceff2;
+  --surface: #fbfcfd;
+  --cell: #f0f3f5;
+  --ink: #16212b;
+  --muted: #55646f;
+  --line: #cdd5dc;
+  --accent: #2b2bd6;
+  --accent-soft: #e3e3fb;
+  --on-accent: #ffffff;
+  --hit: #f2b01e;
+  --good: #1d6f3d;
+  --warn: #b3261e;
+  --code-bg: #15222c;
+  --code-ink: #d8e2ea;
+  --code-cm: #7f93a3;
+  --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
+    --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --hit: #f5b83d; --good: #4cc77b; --warn: #ff8a80;
+    --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
+  --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --hit: #f5b83d; --good: #4cc77b; --warn: #ff8a80;
+  --code-bg: #0b1117;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px));
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 500; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; max-width: 65ch; }
+
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.two { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field > .lab, .lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+input[type="text"] { font: inherit; font-family: var(--font-mono); font-size: 15px; width: 100%; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+textarea { font: inherit; font-family: var(--font-mono); font-size: 13px; width: 100%; min-height: 150px; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+input[type="range"] { accent-color: var(--accent); width: 160px; max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
+.seg label:last-of-type { border-right: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 18px; height: 18px; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.status { min-height: 2.4em; font-weight: 500; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* result lists */
+.results { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); padding: 4px; }
+.res { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 3px 8px; border: 2px solid transparent; border-radius: 6px; font-family: var(--font-mono); font-size: 14px; background: none; text-align: left; color: var(--ink); width: 100%; cursor: default; }
+button.res { cursor: pointer; font-family: var(--font-mono); }
+.res.sel { border-color: var(--accent); background: var(--accent-soft); }
+.res .rk { color: var(--muted); font-size: 12px; }
+.res .txt { overflow-wrap: anywhere; }
+.res .m { background: var(--accent); color: var(--on-accent); border-radius: 2px; font-weight: 700; }
+.res .sc { font-size: 12px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.more { color: var(--muted); font-size: 13px; padding: 4px 8px; }
+.alg { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 3px 8px; font-family: var(--font-mono); font-size: 14px; border-radius: 6px; }
+.alg.first { background: var(--cell); }
+.alg.best { background: var(--accent-soft); }
+.alg .m { background: var(--accent); color: var(--on-accent); border-radius: 2px; font-weight: 700; }
+.tag { font-family: var(--font-body); font-size: 11px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); white-space: nowrap; }
+.tag.best { border-color: var(--accent); font-weight: 600; }
+
+/* dynamic programming grid */
+.gridwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 6px; }
+table.dp { border-collapse: collapse; font-family: var(--font-mono); font-size: 13px; }
+table.dp th, table.dp td { border: 1px solid var(--line); padding: 4px 8px; min-width: 38px; text-align: center; }
+table.dp th { background: var(--cell); font-weight: 700; position: static; letter-spacing: 0; text-transform: none; color: var(--ink); font-size: 13px; }
+table.dp td.blank { color: var(--muted); }
+table.dp td.path { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+table.dp td.can { background: var(--accent-soft); }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; }
+td.mono, th.mono { font-family: var(--font-mono); font-weight: 400; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+tr.total td { font-weight: 700; border-top: 2px solid var(--line); }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+.weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+
+@media (max-width: 920px) { .two { grid-template-columns: minmax(0, 1fr); } dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .res { font-size: 13px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>Best match first</h1>
+    <p class="lead">Type a few letters into a fuzzy finder and it lists everything that contains them in order. That is often dozens of items, and the one you want has to be near the top. This page shows how a finder decides which match is best, from choosing the letters to scoring them to finding the best choice quickly, and how it stays fast on a list of thousands.</p>
+  </header>
+
+  <section aria-labelledby="h-what">
+    <h2 id="h-what">Matching is the easy part</h2>
+    <p>The rule for a match is simple: the letters you typed must appear in the item, in the same order, with anything allowed in between. We met this as <em>Letters in order</em> on <a href="../shortest-unique-identifiers/#h-fuzzy">Just enough letters</a>. But a short query matches a lot. Here is a made-up list of project files. Everything below uses it, and you can change it or load another.</p>
+    <div class="panel">
+      <label class="field" for="items"><span class="lab">Items, one per line</span><textarea id="items" spellcheck="false"></textarea></label>
+      <div class="row" id="presets" role="group" aria-label="Preset lists"></div>
+      <p class="note" id="items-note"></p>
+    </div>
+    <p>Type <code>rep</code> below. Matches appear in the order the list happens to have them, which is useless: a file called <code>readme_report.md</code> and one that merely happens to contain an <code>r</code>, an <code>e</code> and a <code>p</code> far apart look equally good. Then switch to ranked.</p>
+    <div class="panel">
+      <label class="field" for="q1"><span class="lab">Type letters</span><input type="text" id="q1" autocomplete="off" spellcheck="false" placeholder="for example: rep"></label>
+      <div class="field"><span class="lab" id="lab-rank">Order</span><div class="seg" role="radiogroup" aria-labelledby="lab-rank" id="seg-rank"></div></div>
+      <div class="results" id="res1" aria-label="Matches"></div>
+      <p class="status" id="st1" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-align">
+    <h2 id="h-align">Which letters?</h2>
+    <p>Ranking needs a score for each match. But even one item can match in several different ways, because each typed letter may be found in more than one place. Take <code>rep</code> and <code>readme_report.md</code>. A quick way to match is to take the first <code>r</code>, then the first <code>e</code> after it, then the first <code>p</code> after that. It works, but it scatters the letters. The letters of <code>report</code> sit together, at the start of a word, and are obviously what you meant.</p>
+    <div class="panel">
+      <div class="two">
+        <label class="field" for="exItem"><span class="lab">Item</span><input type="text" id="exItem" autocomplete="off" spellcheck="false"></label>
+        <label class="field" for="exQuery"><span class="lab">Letters</span><input type="text" id="exQuery" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div id="ex-all" role="list" aria-label="Every way to place the letters"></div>
+      <p class="status" id="ex-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>Every way of placing the letters is listed, with its score from the rules in the next section. The first-found placement is tagged and so is the best one.</p>
+  </section>
+
+  <section aria-labelledby="h-score">
+    <h2 id="h-score">What makes a match good?</h2>
+    <p>A finder scores a placement by adding up rewards and penalties for each matched letter. Typical rules, which this page uses in a simplified form:</p>
+    <dl class="lines">
+      <div><dt>Each matched letter</dt><dd>A small base reward, so longer queries that match score higher than shorter ones.</dd></div>
+      <div><dt>Start of the item</dt><dd>A bonus when a letter matches the very first character.</dd></div>
+      <div><dt>Start of a word</dt><dd>A bonus when a letter follows a separator such as <code>/</code>, <code>.</code>, <code>_</code>, <code>-</code> or a space, or begins a camelCase hump. People tend to type the starts of words.</dd></div>
+      <div><dt>Consecutive letters</dt><dd>A bonus when a letter immediately follows the previous matched letter, because a run of letters is much more likely to be what you meant.</dd></div>
+      <div><dt>Gaps</dt><dd>A penalty for letters skipped between two matches, charged more for starting a gap than for each extra letter in it.</dd></div>
+      <div><dt>Matching case</dt><dd>A tiny bonus when the typed letter has the same case as the item&rsquo;s letter.</dd></div>
+    </dl>
+    <p>These numbers are made up for this page, in the spirit of how real finders work and not copied from any of them. Try the playground. Change a weight and watch the order change. Click a result to see its scorecard.</p>
+    <div class="panel">
+      <label class="field" for="q2"><span class="lab">Type letters</span><input type="text" id="q2" autocomplete="off" spellcheck="false" placeholder="for example: rep"></label>
+      <div class="weights" id="weights"></div>
+      <div class="row">
+        <div class="field"><span class="lab" id="lab-align">Which placement to score</span><div class="seg" role="radiogroup" aria-labelledby="lab-align" id="seg-align"></div></div>
+        <label class="check"><input type="checkbox" id="smart" checked> Smart case</label>
+        <button class="btn small" type="button" id="w-reset">Reset the weights</button>
+      </div>
+      <div class="two">
+        <div>
+          <div class="results" id="res2" aria-label="Ranked matches"></div>
+          <p class="status" id="st2" role="status" aria-live="polite"></p>
+        </div>
+        <div>
+          <span class="lab">Scorecard for the selected result</span>
+          <div class="tablewrap" style="margin-top:6px"><table id="bd"></table></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">Smart case means a query typed in lower case ignores case, and a query containing a capital letter must match case exactly. Many finders work that way.</p>
+    <details open>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-score"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-dp">
+    <h2 id="h-dp">Finding the best placement</h2>
+    <p>There can be a great many placements: a query of three letters in a long path might fit in dozens of ways, and the number grows quickly as the query and the item get longer. Trying them all is wasteful. <strong>Dynamic programming</strong> avoids it by remembering partial answers.</p>
+    <p>Build a grid with one row for each typed letter and one column for each letter of the item. Each cell holds the best score for matching the typed letters up to that row, with that row&rsquo;s letter placed at that column. Cells where the letters differ stay empty. To fill a cell, look at the cells in the row above, to its left, and take the best of (their score plus this letter&rsquo;s reward or penalty after that earlier match). The best score overall is the largest value in the last row, and following the choices back gives the placement.</p>
+    <p>The grid below is for the item and letters you chose above. The path in blue is the best placement. Pale cells are the ones the path could have used.</p>
+    <div class="panel">
+      <div class="gridwrap"><table class="dp" id="dp"></table></div>
+      <p class="status" id="dp-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>Each cell reuses answers already worked out for the row above. That is the whole idea of dynamic programming: solve small versions first, remember them, and build up. This page checks its answer by also trying every placement, as in the list above. They agree, but the grid needs far less work as things grow.</p>
+    <details open>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-dp"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-fast">
+    <h2 id="h-fast">Staying fast on thousands of items</h2>
+    <p>Scoring with a grid is cheap for one item, but a finder may hold tens of thousands of files and must answer after every keystroke. Two ideas keep it quick.</p>
+    <ul class="try">
+      <li><strong>A cheap check first.</strong> Most items do not match at all. A single pass that takes the first letter found for each typed letter, the quick method from above, decides whether an item matches. Only the items that pass are scored with the grid.</li>
+      <li><strong>Only re-check survivors.</strong> If you had typed <code>re</code> and now type <code>rep</code>, any item that fails <code>re</code> must fail <code>rep</code>. So each extra letter only needs to look at the items that matched before it.</li>
+    </ul>
+    <p>Below is a made-up list of 3,000 file paths. Type, and watch the numbers.</p>
+    <div class="panel">
+      <label class="field" for="q3"><span class="lab">Type letters</span><input type="text" id="q3" autocomplete="off" spellcheck="false" placeholder="for example: usrtok"></label>
+      <div class="readout">
+        <div><span class="k">Items</span><span class="v" id="f-n">0</span></div>
+        <div><span class="k">Passed the cheap check</span><span class="v" id="f-pass">0</span></div>
+        <div><span class="k">Scored in full</span><span class="v" id="f-scored">0</span></div>
+        <div><span class="k">Time</span><span class="v" id="f-ms">0 ms</span></div>
+        <div><span class="k">If only survivors were re-checked</span><span class="v" id="f-incr">0</span></div>
+      </div>
+      <div class="results" id="res3" aria-label="Best matches in the large list"></div>
+      <p class="status" id="st3" role="status" aria-live="polite"></p>
+    </div>
+    <p class="note">The last figure is how many items the cheap check would have had to look at if this page remembered the survivors of the previous keystroke. This page does not do that, to keep the code short, so it re-checks all of them each time. The time shown is for this browser on whatever device you are using.</p>
+  </section>
+
+  <section aria-labelledby="h-parts">
+    <h2 id="h-parts">The parts you can swap</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
+        <tbody>
+          <tr><td>Which placement</td><td>The first letters found, or the best one</td><td>The first is quick but can scatter the letters. The best costs a grid but picks the placement a person meant.</td></tr>
+          <tr><td>The rules</td><td>Which bonuses and penalties, and how large</td><td>What &ldquo;best&rdquo; means. A finder for file paths rewards word starts. One for commands might reward the first letters of each word.</td></tr>
+          <tr><td>Case</td><td>Ignore it, match it, or smart case</td><td>Whether capitals in the query make the search stricter.</td></tr>
+          <tr><td>What to match</td><td>The whole path, or only the file name</td><td>Whether a letter in a directory name counts as much as one in the file name.</td></tr>
+          <tr><td>Ties</td><td>Shorter item first, or list order</td><td>Which of two equal scores is shown first.</td></tr>
+          <tr><td>Several terms</td><td>All terms must match, in any order</td><td>Typing two short words instead of one string of letters.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The page breaks ties by the shorter item and then by list order. Real finders offer extra syntax for exact matches, prefixes and exclusions. I recall that fzf does, but check its documentation, as I have not verified the details.</p>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Smith&ndash;Waterman</dt><dd>The dynamic-programming method for aligning two sequences in biology, scoring matches and gaps. I recall that fzf&rsquo;s main algorithm is described as a modified version of it, but check that before relying on it.</dd></div>
+      <div><dt>Edit distance</dt><dd>The number of insertions, deletions and substitutions needed to turn one string into another, found with a grid very like this one. It forgives typos, where letters-in-order forgives gaps.</dd></div>
+      <div><dt>Trigram index</dt><dd>Splitting text into three-letter pieces and indexing them, so a search can skip most of a large list. It is used in some code search tools. This is from memory.</dd></div>
+      <div><dt>Levenshtein automaton</dt><dd>A machine that recognises all words within a given edit distance of a query, used to search dictionaries quickly.</dd></div>
+      <div><dt>Related pages</dt><dd>Autocomplete by prefix is <a href="../tries/">Shared beginnings</a>. Fuzzy in a different sense, spotting near-copies, is <a href="../fuzzy-hashing/">Nearly the same</a>. How few letters would single out an item is <a href="../shortest-unique-identifiers/">Just enough letters</a>.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>A fuzzy match is letters in order. A short query matches a lot, so ranking decides whether the finder is any use.</li>
+      <li>One item can match in many ways, and the first letters found are often not the ones you meant.</li>
+      <li>A score adds rewards for letters that start words and sit together, and penalties for gaps.</li>
+      <li>Dynamic programming finds the best-scoring placement by remembering the best answers for shorter queries.</li>
+      <li>A cheap check first, and re-checking only survivors, keep it fast on long lists.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+
+  /* ---------- the matching and scoring (displayed and run as written) ---------- */
+  const DEFAULTS = { match: 16, start: 16, boundary: 8, run: 8, gapStart: 3, gapExtend: 1, caseMatch: 1 };
+
+  const same = (a, b, caseSensitive) => {
+    return caseSensitive ? a === b : a.toLowerCase() === b.toLowerCase();
+  };
+
+  const isBoundary = (text, j) => {
+    // after a separator, or the start of a camelCase hump
+    const prev = text[j - 1], cur = text[j];
+    return /[^A-Za-z0-9]/.test(prev) || (/[a-z]/.test(prev) && /[A-Z]/.test(cur));
+  };
+
+  const greedyPositions = (query, text, caseSensitive) => {
+    // the quick way: the first letter found for each typed letter
+    const at = [];
+    let from = 0;
+    for (const letter of query) {
+      let j = from;
+      while (j < text.length && !same(letter, text[j], caseSensitive)) j++;
+      if (j === text.length) return null;
+      at.push(j);
+      from = j + 1;
+    }
+    return at;
+  };
+
+  const letterParts = (query, text, i, j, k, w) => {
+    // what matching query[i] at text[j] earns, after matching the previous letter at k
+    const parts = { base: w.match, position: 0, run: 0, gap: 0, kase: 0 };
+    if (j === 0) parts.position = w.start;
+    else if (isBoundary(text, j)) parts.position = w.boundary;
+    if (query[i] === text[j]) parts.kase = w.caseMatch;
+    if (k !== null) {
+      if (j === k + 1) parts.run = w.run;
+      else parts.gap = -(w.gapStart + w.gapExtend * (j - k - 2));
+    }
+    return parts;
+  };
+  const letterScore = (query, text, i, j, k, w) => {
+    return Object.values(letterParts(query, text, i, j, k, w)).reduce((a, b) => a + b, 0);
+  };
+
+  const scoreAt = (query, text, at, w) => {
+    return at.reduce((sum, j, i) => sum + letterScore(query, text, i, j, i ? at[i - 1] : null, w), 0);
+  };
+
+  const bestPlacement = (query, text, w, caseSensitive) => {
+    const m = query.length, n = text.length;
+    const best = Array.from({ length: m }, () => new Array(n).fill(null));
+    const from = Array.from({ length: m }, () => new Array(n).fill(null));
+    for (let i = 0; i < m; i++) {
+      for (let j = 0; j < n; j++) {
+        if (!same(query[i], text[j], caseSensitive)) continue;
+        if (i === 0) { best[0][j] = letterScore(query, text, 0, j, null, w); continue; }
+        for (let k = 0; k < j; k++) {
+          if (best[i - 1][k] === null) continue;
+          const s = best[i - 1][k] + letterScore(query, text, i, j, k, w);
+          if (best[i][j] === null || s > best[i][j]) { best[i][j] = s; from[i][j] = k; }
+        }
+      }
+    }
+    let end = -1;
+    for (let j = 0; j < n; j++) {
+      if (best[m - 1][j] !== null && (end < 0 || best[m - 1][j] > best[m - 1][end])) end = j;
+    }
+    if (end < 0) return null;
+    const at = [end];
+    for (let i = m - 1; i > 0; i--) at.unshift(from[i][at[0]]);
+    return { score: best[m - 1][end], at, table: best, from };
+  };
+
+  /* ---------- helpers that are not part of the idea ---------- */
+  function* everyPlacement(query, text, caseSensitive, limit = 400) {
+    let count = 0;
+    const walk = function* (i, start, at) {
+      if (count >= limit) return;
+      if (i === query.length) { count++; yield at.slice(); return; }
+      for (let j = start; j < text.length; j++) {
+        if (same(query[i], text[j], caseSensitive)) { at.push(j); yield* walk(i + 1, j + 1, at); at.pop(); }
+      }
+    };
+    yield* walk(0, 0, []);
+  }
+  const smartCase = (query, on) => on && /[A-Z]/.test(query);
+  function rank(items, query, w, opts) {
+    const o = opts || {};
+    const cs = smartCase(query, o.smart);
+    const out = [];
+    let passed = 0, scored = 0;
+    items.forEach((text, index) => {
+      const quick = greedyPositions(query, text, cs);
+      if (!quick) return;
+      passed++;
+      let result;
+      if (o.greedy) result = { score: scoreAt(query, text, quick, w), at: quick };
+      else { scored++; result = bestPlacement(query, text, w, cs); }
+      out.push({ index, text, score: result.score, at: result.at });
+    });
+    return { out, passed, scored: o.greedy ? 0 : scored, cs };
+  }
+  const byScore = (a, b) => b.score - a.score || a.text.length - b.text.length || a.index - b.index;
+
+  function highlighted(text, at) {
+    const f = el('span', 'txt');
+    [...text].forEach((ch, i) => { const s = el('span', at && at.includes(i) ? 'm' : '', ch); f.appendChild(s); });
+    return f;
+  }
+  function drawResults(box, list, opts) {
+    const o = opts || {};
+    box.textContent = '';
+    const shown = list.slice(0, o.show || 12);
+    shown.forEach((r, i) => {
+      const row = el(o.onSelect ? 'button' : 'div', 'res' + (o.selected === r.index ? ' sel' : ''));
+      if (o.onSelect) { row.type = 'button'; row.addEventListener('click', () => o.onSelect(r.index)); }
+      row.setAttribute('aria-label', r.text + (o.showScore ? ', score ' + r.score : ''));
+      row.append(el('span', 'rk', String(i + 1)), highlighted(r.text, r.at), o.showScore ? el('span', 'sc', String(r.score)) : el('span'));
+      box.appendChild(row);
+    });
+    if (list.length > shown.length) box.appendChild(el('div', 'more', '… and ' + (list.length - shown.length) + ' more matches'));
+  }
+
+  /* ---------- code panels ---------- */
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|new|null|true|false|continue)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  function showCode(id, items) {
+    items.forEach(([name, fn, tag]) => {
+      const d = el('div', 'fn');
+      d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+      d.appendChild(codeBlock(name + ' = ' + dedent(fn.toString())));
+      $(id).appendChild(d);
+    });
+  }
+  showCode('code-score', [['isBoundary', isBoundary, 'does a word start here?'], ['greedyPositions', greedyPositions, 'the first letters found'], ['letterParts', letterParts, 'what one matched letter earns'], ['scoreAt', scoreAt, 'add up a placement']]);
+  showCode('code-dp', [['bestPlacement', bestPlacement, 'fill the grid, then trace the best path back']]);
+
+  /* ---------- the items ---------- */
+  const PRESETS = {
+    files: ['Project files', `README.md
+readme_report.md
+docs/getting-started.md
+docs/report-template.md
+src/index.ts
+src/app/main.ts
+src/app/router.ts
+src/components/Button.tsx
+src/components/ButtonGroup.tsx
+src/components/BigButton.tsx
+src/components/ReportTable.tsx
+src/components/RepeatList.tsx
+src/utils/button-helpers.ts
+src/utils/format-report.ts
+src/utils/parse-args.ts
+test/button.test.ts
+test/report.test.ts
+test/router.test.ts
+package.json
+package-lock.json
+config/reports.json
+scripts/build-report.sh
+scripts/release.sh
+styles/theme.css`],
+    commands: ['Commands', `git commit -m
+git checkout main
+git cherry-pick
+git push origin
+git pull --rebase
+git rebase -i
+git reset --hard
+git remote add
+git status
+git stash pop
+git log --oneline
+git diff --staged
+git branch -d
+git merge --no-ff`]
+  };
+  let items = [];
+  function setItems(text) {
+    items = text.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 300).map((l) => l.slice(0, 80));
+    const dropped = text.split('\n').filter((l) => l.trim()).length > items.length;
+    $('items-note').textContent = items.length + ' items' + (dropped ? '. Extra lines or very long lines were cut to keep the page quick.' : '.');
+    redrawAll();
+  }
+
+  /* ---------- section 1: matching, unranked and ranked ---------- */
+  let order = 'list';
+  const ORDERS = { list: { name: 'List order' }, ranked: { name: 'Best first' } };
+  function drawFirst() {
+    const q = $('q1').value.replace(/\s+/g, '');
+    if (!q) { $('res1').textContent = ''; $('st1').textContent = 'Type a few letters, such as rep.'; return; }
+    const r = rank(items, q, DEFAULTS, { smart: true });
+    const list = order === 'ranked' ? r.out.slice().sort(byScore) : r.out;
+    drawResults($('res1'), list, { show: 14, showScore: order === 'ranked' });
+    $('st1').textContent = plural(r.out.length, 'item matches', 'items match') + ' “' + q + '” out of ' + items.length + '. ' + (order === 'ranked' ? 'They are sorted by score, best first.' : 'They are in the order of the list, so the best match could be anywhere.');
+  }
+
+  /* ---------- section 2: which letters? ---------- */
+  function drawExample() {
+    const text = $('exItem').value, q = $('exQuery').value.replace(/\s+/g, '');
+    const box = $('ex-all');
+    box.textContent = '';
+    if (!text || !q) { $('ex-status').textContent = 'Type an item and some letters.'; return; }
+    const cs = smartCase(q, true);
+    const all = [...everyPlacement(q, text, cs)];
+    if (!all.length) { $('ex-status').textContent = 'The letters “' + q + '” do not appear in order in “' + text + '”, so there is no match.'; return; }
+    const quick = greedyPositions(q, text, cs), best = bestPlacement(q, text, DEFAULTS, cs);
+    const scored = all.map((at) => ({ at, score: scoreAt(q, text, at, DEFAULTS) })).sort((a, b) => b.score - a.score);
+    const key = (at) => at.join(',');
+    scored.slice(0, 12).forEach((p) => {
+      const isFirst = key(p.at) === key(quick), isBest = key(p.at) === key(best.at);
+      const row = el('div', 'alg' + (isBest ? ' best' : (isFirst ? ' first' : '')));
+      row.setAttribute('role', 'listitem');
+      const tags = el('span');
+      if (isFirst) tags.appendChild(el('span', 'tag', 'first letters found'));
+      if (isBest) tags.appendChild(el('span', 'tag best', 'best'));
+      row.append(highlighted(text, p.at), tags, el('span', 'mono', String(p.score)));
+      box.appendChild(row);
+    });
+    if (scored.length > 12) box.appendChild(el('div', 'more', '… and ' + (scored.length - 12) + ' more placements'));
+    const topAll = scored[0].score, complete = all.length < 400;
+    $('ex-status').textContent = plural(all.length, 'way', 'ways') + (complete ? '' : ' or more') + ' to place the letters. The first letters found score ' + scoreAt(q, text, quick, DEFAULTS) + ' and the best placement scores ' + best.score + '. ' +
+      (complete ? (topAll === best.score ? 'Trying every placement gives the same best score, so the grid in the next section found the true best.' : 'Trying every placement found a better score than the grid, which should not happen.') : 'There are too many placements to try them all here.');
+    return { text, q, cs };
+  }
+
+  /* ---------- section 3: scoring playground ---------- */
+  let W = { ...DEFAULTS }, alignMode = 'best', smart = true, selected = -1;
+  const WEIGHTS = [['start', 'Start of the item', 0, 30], ['boundary', 'Start of a word', 0, 20], ['run', 'Consecutive letters', 0, 20], ['gapStart', 'Starting a gap', 0, 10], ['gapExtend', 'Each extra gapped letter', 0, 5]];
+  function buildWeights() {
+    const box = $('weights');
+    box.textContent = '';
+    WEIGHTS.forEach(([key, label, min, max]) => {
+      const f = el('label', 'field'); f.htmlFor = 'w-' + key;
+      f.appendChild(el('span', 'lab', label + ': ' + W[key]));
+      const input = el('input'); input.type = 'range'; input.id = 'w-' + key; input.min = min; input.max = max; input.value = W[key];
+      input.addEventListener('input', () => { W[key] = +input.value; f.firstChild.textContent = label + ': ' + W[key]; drawScoring(); });
+      f.appendChild(input); box.appendChild(f);
+    });
+  }
+  const ALIGNS = { best: { name: 'The best one' }, greedy: { name: 'The first letters found' } };
+  function drawScoring() {
+    const q = $('q2').value.replace(/\s+/g, '');
+    const bd = $('bd');
+    bd.textContent = '';
+    if (!q) { $('res2').textContent = ''; $('st2').textContent = 'Type a few letters, such as rep. Then click a result.'; return; }
+    const r = rank(items, q, W, { smart, greedy: alignMode === 'greedy' });
+    const list = r.out.slice().sort(byScore);
+    if (!list.some((x) => x.index === selected)) selected = list.length ? list[0].index : -1;
+    drawResults($('res2'), list, { show: 12, showScore: true, selected, onSelect: (i) => { selected = i; drawScoring(); } });
+    $('st2').textContent = plural(list.length, 'item matches', 'items match') + ' “' + q + '”' + (r.cs ? ' (case matters, because the query has a capital)' : '') + '.';
+    const chosen = list.find((x) => x.index === selected);
+    if (!chosen) return;
+    bd.innerHTML = '<thead><tr><th>Letter</th><th>At</th><th>Base</th><th>Position</th><th>Run</th><th>Gap</th><th>Case</th><th>Sum</th></tr></thead>';
+    const body = el('tbody');
+    let total = 0;
+    chosen.at.forEach((j, i) => {
+      const p = letterParts(q, chosen.text, i, j, i ? chosen.at[i - 1] : null, W);
+      const sum = Object.values(p).reduce((a, b) => a + b, 0); total += sum;
+      const tr = el('tr');
+      tr.append(el('td', 'mono', chosen.text[j]), el('td', 'num', String(j)), el('td', 'num', String(p.base)), el('td', 'num', String(p.position)), el('td', 'num', String(p.run)), el('td', 'num', String(p.gap)), el('td', 'num', String(p.kase)), el('td', 'num', String(sum)));
+      body.appendChild(tr);
+    });
+    const tr = el('tr', 'total');
+    const td = el('td', null, chosen.text + ' scores'); td.colSpan = 7;
+    tr.append(td, el('td', 'num', String(total)));
+    body.appendChild(tr);
+    bd.appendChild(body);
+  }
+
+  /* ---------- section 4: the grid ---------- */
+  function drawGrid() {
+    const text = $('exItem').value, q = $('exQuery').value.replace(/\s+/g, '');
+    const tbl = $('dp');
+    tbl.textContent = '';
+    if (!text || !q) { $('dp-status').textContent = 'Type an item and some letters in the section above.'; return; }
+    const cs = smartCase(q, true);
+    const res = bestPlacement(q, text, DEFAULTS, cs);
+    if (!res) { $('dp-status').textContent = 'There is no match for those letters, so the grid has nothing to find.'; const t = el('tbody'); tbl.appendChild(t); return; }
+    const head = el('tr'); head.appendChild(el('th'));
+    [...text].forEach((ch) => head.appendChild(el('th', null, ch)));
+    const thead = el('thead'); thead.appendChild(head); tbl.appendChild(thead);
+    const onPath = new Set(res.at.map((j, i) => i + ':' + j));
+    const body = el('tbody');
+    [...q].forEach((letter, i) => {
+      const tr = el('tr'); tr.appendChild(el('th', null, letter));
+      [...text].forEach((ch, j) => {
+        const v = res.table[i][j];
+        const td = el('td', v === null ? 'blank' : (onPath.has(i + ':' + j) ? 'path' : 'can'), v === null ? '·' : String(v));
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    tbl.appendChild(body);
+    $('dp-status').textContent = 'The best placement scores ' + res.score + ', the value in the blue cell of the last row. Following the blue cells upwards gives the positions ' + res.at.map((j) => j + 1).join(', ') + ' (counting from 1).';
+  }
+
+  /* ---------- section 5: a large list ---------- */
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function makeBig() {
+    const r = mulberry32(2024);
+    const pick = (l) => l[Math.floor(r() * l.length)];
+    const dirs = ['src', 'lib', 'test', 'docs', 'app', 'components', 'utils', 'core', 'api', 'models', 'views', 'config', 'scripts', 'assets'];
+    const words = ['button', 'group', 'list', 'item', 'user', 'account', 'auth', 'login', 'session', 'token', 'parser', 'lexer', 'render', 'state', 'store', 'cache', 'queue', 'worker', 'index', 'main', 'helpers', 'types', 'style', 'theme', 'report', 'router', 'format', 'event', 'handler', 'config'];
+    const exts = ['.ts', '.tsx', '.js', '.css', '.md', '.json', '.py'];
+    const out = new Set();
+    while (out.size < 3000) {
+      const depth = 1 + Math.floor(r() * 3);
+      const parts = Array.from({ length: depth }, () => pick(dirs));
+      const camel = r() < 0.3;
+      const a = pick(words), b = pick(words);
+      const name = camel ? a + b[0].toUpperCase() + b.slice(1) : (r() < 0.5 ? a + '-' + b : a + '_' + b);
+      out.add(parts.join('/') + '/' + name + pick(exts));
+    }
+    return [...out];
+  }
+  const BIG = makeBig();
+  let prevQuery = '', prevSurvivors = BIG.length;
+  function drawBig() {
+    const q = $('q3').value.replace(/\s+/g, '');
+    $('f-n').textContent = String(BIG.length);
+    if (!q) { ['f-pass', 'f-scored', 'f-incr'].forEach((id) => { $(id).textContent = '0'; }); $('f-ms').textContent = '0 ms'; $('res3').textContent = ''; $('st3').textContent = 'Type a few letters, such as usrtok or parsjs.'; prevQuery = ''; prevSurvivors = BIG.length; return; }
+    const t0 = performance.now();
+    const r = rank(BIG, q, DEFAULTS, { smart: true });
+    const ms = performance.now() - t0;
+    const incr = prevQuery && q.startsWith(prevQuery) && q.length > prevQuery.length ? prevSurvivors : BIG.length;
+    prevQuery = q; prevSurvivors = r.passed;
+    $('f-pass').textContent = String(r.passed); $('f-scored').textContent = String(r.scored); $('f-ms').textContent = ms.toFixed(1) + ' ms'; $('f-incr').textContent = String(incr);
+    const list = r.out.slice().sort(byScore);
+    drawResults($('res3'), list, { show: 8, showScore: true });
+    $('st3').textContent = r.passed === 0 ? 'Nothing matches “' + q + '”.' : 'Of ' + BIG.length + ' items, ' + r.passed + ' passed the cheap check, and only those were scored in full. The best are shown.';
+  }
+
+  /* ---------- wiring ---------- */
+  function seg(id, name, registry, current, onPick) {
+    const e = $(id);
+    Object.entries(registry).forEach(([key, v]) => {
+      e.insertAdjacentHTML('beforeend', '<input type="radio" name="' + name + '" id="' + name + '-' + key + '" value="' + key + '"' + (key === current ? ' checked' : '') + '><label for="' + name + '-' + key + '">' + esc(v.name) + '</label>');
+    });
+    e.addEventListener('change', (ev) => onPick(ev.target.value));
+  }
+  function redrawAll() { drawFirst(); drawExample(); drawScoring(); drawGrid(); }
+  seg('seg-rank', 'rank', ORDERS, order, (v) => { order = v; drawFirst(); });
+  seg('seg-align', 'align', ALIGNS, alignMode, (v) => { alignMode = v; drawScoring(); });
+  $('smart').addEventListener('change', () => { smart = $('smart').checked; drawScoring(); });
+  $('w-reset').addEventListener('click', () => { W = { ...DEFAULTS }; buildWeights(); drawScoring(); });
+  $('q1').addEventListener('input', drawFirst); $('q2').addEventListener('input', drawScoring); $('q3').addEventListener('input', drawBig);
+  $('exItem').addEventListener('input', () => { drawExample(); drawGrid(); }); $('exQuery').addEventListener('input', () => { drawExample(); drawGrid(); });
+  let itemsTimer = 0;
+  $('items').addEventListener('input', () => { clearTimeout(itemsTimer); itemsTimer = setTimeout(() => setItems($('items').value), 150); });
+  Object.entries(PRESETS).forEach(([key, [label, text]]) => {
+    const b = el('button', 'btn small', label); b.type = 'button';
+    b.addEventListener('click', () => { $('items').value = text; setItems(text); });
+    $('presets').appendChild(b);
+  });
+  buildWeights();
+  $('items').value = PRESETS.files[1];
+  $('q1').value = 'rep'; $('q2').value = 'rep'; $('exItem').value = 'readme_report.md'; $('exQuery').value = 'rep'; $('q3').value = 'usrtok';
+  setItems($('items').value);
+  drawBig();
+})();
+</script>
+</body>
+</html>
