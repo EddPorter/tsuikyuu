@@ -175,6 +175,15 @@ details { border: 1px solid var(--line); border-radius: 6px; background: var(--s
 details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
 details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
 .blurb { font-size: 0.98rem; }
+ol.steps { margin: 0; padding-left: 1.4em; display: grid; gap: 8px; max-width: 70ch; }
+.sortlist { list-style: none; margin: 0; padding: 4px; max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); }
+.sl { display: flex; gap: 10px; align-items: center; padding: 3px 8px; border-radius: 4px; border: 2px solid transparent; font-family: var(--font-mono); font-size: 14px; }
+.sl .w { font-size: 12px; background: var(--accent-soft); border-radius: 4px; padding: 0 6px; min-width: 6.5em; text-align: center; }
+.sl.focus { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+.sl.nb { border-color: var(--hit); }
+.l.sh { background: var(--hit); color: #16212b; }
+.l.nx { background: var(--accent); color: var(--on-accent); }
+tr.cur td { box-shadow: inset 0 0 0 1px var(--accent); }
 ul.try, ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
 footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
 
@@ -316,9 +325,49 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
 
   <section aria-labelledby="h-sort">
     <h2 id="h-sort">A third way: sort the endings</h2>
-    <p>There is another approach that does not try pieces at all. List every ending of every word (<code>banana</code> gives <code>banana</code>, <code>anana</code>, <code>nana</code>, <code>ana</code>, <code>na</code>, <code>a</code>), then sort the whole list alphabetically. Endings that start with the same letters end up next to each other. A piece appears in two different words only if some ending of each starts with it, and those endings sit side by side.</p>
-    <p>So for each ending, look at the nearest ending from a different word, above and below. Count how many letters they share at the start. The piece must be one letter longer than that to be ours alone. The shortest such piece across all of a word's endings is its answer. The table works this out for your words with the rules fixed at <em>contains</em> and <em>only this word</em>.</p>
-    <div class="tablewrap"><table id="sort-table"></table></div>
+    <p>The loop above could answer many different questions, because you could swap its rules. The sorting method is a specialist. It answers exactly one of them, the one this page began with. In the playground's terms that is <em>Contains</em> with <em>Only this word</em>, a problem usually called the <strong>shortest unique substring</strong> problem. A substring is a run of letters side by side. That is different from a subsequence, which is letters in order with gaps allowed, the playground's third option.</p>
+    <div class="tablewrap" style="max-height:none">
+      <table>
+        <thead><tr><th>Playground choice</th><th>Does sorting the endings answer it?</th></tr></thead>
+        <tbody>
+          <tr><td>Contains, only this word</td><td>Yes. This is the problem it solves.</td></tr>
+          <tr><td>Starts with, only this word</td><td>Yes, in a simpler form. Sort the whole words instead of their endings and compare each word with its neighbours.</td></tr>
+          <tr><td>Letters in order</td><td>No. The trick depends on pieces being runs of letters, because the endings that match a run sit together once sorted. Letters with gaps in between do not.</td></tr>
+          <tr><td>At most two words</td><td>Not covered here.</td></tr>
+          <tr><td>Every word</td><td>A different question: the longest text all the words share. Suffix structures can answer it quickly, but not by this neighbour comparison.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>The idea in five steps</h3>
+    <ol class="steps">
+      <li>List every ending of every word. <code>banana</code> gives <code>banana</code>, <code>anana</code>, <code>nana</code>, <code>ana</code>, <code>na</code> and <code>a</code>.</li>
+      <li>Sort the whole list alphabetically. Endings that start with the same letters end up next to each other.</li>
+      <li>A piece is in another word only if some ending of that word starts with it. If so, that ending sits right beside ours in the sorted list. So we only need the nearest ending from a different word, above and below.</li>
+      <li>Count how many letters our ending shares at the start with each of those two neighbours, and take the larger number.</li>
+      <li>One more letter than that makes the piece start differently from every ending of every other word, so only this word has it. Do this for each of the word's endings and keep the shortest piece, the leftmost if there is a tie.</li>
+    </ol>
+    <p>Now walk through it. Pick a word, then step through its endings. Yellow letters are shared with a neighbour from a different word. The blue letter is the one extra letter that makes the piece unique.</p>
+    <div class="bench">
+      <div class="stage">
+        <div class="panel">
+          <div class="field"><span class="lab" id="lab-sword">Word</span><div class="seg" role="radiogroup" aria-labelledby="lab-sword" id="sort-pick"></div></div>
+          <div class="row">
+            <button class="btn" type="button" id="sort-prev">Previous ending</button>
+            <button class="btn primary" type="button" id="sort-next">Next ending</button>
+            <span class="note" id="sort-count"></span>
+          </div>
+          <div id="sort-detail" aria-live="polite"></div>
+          <div class="tablewrap" style="max-height:none"><table id="sort-mini"></table></div>
+          <p class="status" id="sort-result"></p>
+        </div>
+      </div>
+      <div class="side">
+        <div class="panel">
+          <h3>All endings, sorted</h3>
+          <ul class="sortlist" id="sort-list" aria-label="All endings of all words, sorted"></ul>
+        </div>
+      </div>
+    </div>
     <p class="note" id="sort-note"></p>
     <p class="note">This does the work in roughly the time it takes to sort, so it scales far better than either method above. It is harder to explain than a table, which is why it comes last.</p>
   </section>
@@ -330,7 +379,7 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
       <li>Scanning asks every word about every piece. It is simple, but the work multiplies with the number of words.</li>
       <li>An index asks each question once and writes the answer down. It costs more up front and one lookup per piece after that.</li>
       <li>Swapping how a search matches, or what you want from the matches, changes the answers without changing the loop.</li>
-      <li>Sorting the endings reaches the same answers without trying pieces at all.</li>
+      <li>Sorting the endings reaches the same answers without trying pieces at all, but only for one question: the shortest unique substring.</li>
     </ul>
   </section>
 
@@ -347,9 +396,6 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     </dl>
   </section>
 
-  <footer>
-    <p>The loop comes from a small C++ program, ShortestUniqueIdentifier. This page runs a JavaScript port of it.</p>
-  </footer>
 </div>
 
 <script>
@@ -1043,13 +1089,10 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     rows.sort((a, b) => (a.text < b.text ? -1 : a.text > b.text ? 1 : a.wi - b.wi));
     const lcp = (a, b) => { let k = 0; while (k < a.length && k < b.length && a[k] === b[k]) k++; return k; };
     rows.forEach((r, i) => {
-      let shared = 0;
-      for (const d of [-1, 1]) {
-        for (let j = i + d; j >= 0 && j < rows.length; j += d) {
-          if (rows[j].wi !== r.wi) { shared = Math.max(shared, lcp(r.text, rows[j].text)); break; }
-        }
-      }
-      r.shared = shared; r.need = shared + 1; r.fits = r.need <= r.text.length;
+      r.up = -1; r.down = -1; r.lcpUp = 0; r.lcpDown = 0;
+      for (let j = i - 1; j >= 0; j--) if (rows[j].wi !== r.wi) { r.up = j; r.lcpUp = lcp(r.text, rows[j].text); break; }
+      for (let j = i + 1; j < rows.length; j++) if (rows[j].wi !== r.wi) { r.down = j; r.lcpDown = lcp(r.text, rows[j].text); break; }
+      r.shared = Math.max(r.lcpUp, r.lcpDown); r.need = r.shared + 1; r.fits = r.need <= r.text.length;
     });
     const chosen = new Set();
     const answers = words.map((w, wi) => {
@@ -1062,23 +1105,82 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     });
     return { rows, answers, chosen };
   }
-  function drawSort() {
-    const tbl = $('sort-table');
-    tbl.textContent = '';
-    if (!G.words.length) { $('sort-note').textContent = ''; return; }
+  let sortWord = 0, sortStep = 0;
+  function letters(text, sharedN, nextIdx) {
+    const f = document.createDocumentFragment();
+    [...text].forEach((ch, k) => {
+      const sp = el('span', 'l' + (k < sharedN ? ' sh' : (k === nextIdx ? ' nx' : '')), ch);
+      f.appendChild(sp);
+    });
+    return f;
+  }
+  function resetSort() { sortWord = 0; sortStep = 0; }
+  function drawSort(scroll) {
+    const N = G.words.length;
+    const list = $('sort-list'), detail = $('sort-detail'), mini = $('sort-mini'), pick = $('sort-pick');
+    list.textContent = ''; detail.textContent = ''; mini.textContent = ''; pick.textContent = '';
+    if (!N) { $('sort-note').textContent = ''; $('sort-count').textContent = ''; $('sort-result').textContent = 'Type some words at the top of the page.'; return; }
+    if (sortWord >= N) sortWord = 0;
+    G.words.forEach((w, j) => {
+      const input = el('input'); input.type = 'radio'; input.name = 'sword'; input.id = 'sword-' + j; input.value = String(j); input.checked = j === sortWord;
+      const label = el('label', null, w); label.htmlFor = 'sword-' + j;
+      pick.append(input, label);
+    });
     const { rows, answers, chosen } = suffixData(G.words);
-    tbl.innerHTML = '<thead><tr><th>Ending, sorted</th><th>From word</th><th>Letters shared with a different word</th><th>Shortest piece of its own</th></tr></thead>';
+    const mine = rows.filter((r) => r.wi === sortWord).sort((a, b) => a.start - b.start);
+    if (sortStep >= mine.length) sortStep = mine.length - 1;
+    const cur = mine[sortStep], curIdx = rows.indexOf(cur);
+    let focusLi = null;
+    rows.forEach((r, i) => {
+      const li = el('li', 'sl' + (r === cur ? ' focus' : '') + (i === cur.up || i === cur.down ? ' nb' : ''));
+      li.appendChild(el('span', 'w', G.words[r.wi]));
+      const e = el('span', 'e');
+      if (r === cur) { e.appendChild(letters(r.text, cur.shared, cur.fits ? cur.shared : -1)); focusLi = li; }
+      else if (i === cur.up) e.appendChild(letters(r.text, cur.lcpUp, -1));
+      else if (i === cur.down) e.appendChild(letters(r.text, cur.lcpDown, -1));
+      else e.textContent = r.text;
+      li.appendChild(e);
+      list.appendChild(li);
+    });
+    if (scroll && focusLi) list.scrollTop = Math.max(0, focusLi.offsetTop - list.clientHeight / 2);
+    // the detail for the ending being looked at
+    const tiles = el('div', 'tiles');
+    [...cur.text].forEach((ch, k) => {
+      const kind = k < cur.shared ? ' hit' : (k === cur.shared && cur.fits ? ' cand' : '');
+      const t = el('span', 't' + kind, ch); t.setAttribute('aria-hidden', 'true'); tiles.appendChild(t);
+    });
+    detail.appendChild(el('p', null, 'Ending \u201c' + cur.text + '\u201d, from ' + G.words[cur.wi] + ':'));
+    detail.appendChild(tiles);
+    const nb = (idx, lcpN, where) => idx < 0 ? 'No ending from a different word ' + where + '.' :
+      'Nearest ending from a different word ' + where + ': \u201c' + rows[idx].text + '\u201d (' + G.words[rows[idx].wi] + '), sharing ' + plural(lcpN, 'letter', 'letters') + ' at the start.';
+    const ul = el('ul', 'try');
+    ul.appendChild(el('li', null, nb(cur.up, cur.lcpUp, 'above')));
+    ul.appendChild(el('li', null, nb(cur.down, cur.lcpDown, 'below')));
+    ul.appendChild(el('li', null, cur.fits ?
+      'The larger share is ' + cur.shared + '. One more letter makes \u201c' + cur.text.slice(0, cur.need) + '\u201d, which no ending of any other word starts with.' :
+      'The larger share is ' + cur.shared + ', which is every letter this ending has. No piece of it is unique.'));
+    detail.appendChild(ul);
+    $('sort-count').textContent = 'Ending ' + (sortStep + 1) + ' of ' + mine.length;
+    $('sort-prev').disabled = sortStep === 0; $('sort-next').disabled = sortStep >= mine.length - 1;
+    // all of this word's endings
+    mini.innerHTML = '<thead><tr><th>Ending</th><th>Shared with a neighbour</th><th>Shortest piece of its own</th></tr></thead>';
     const body = el('tbody');
-    rows.forEach((r) => {
-      const tr = el('tr', chosen.has(r) ? 'chosen' : '');
-      tr.append(el('td', 'mono', r.text), el('td', null, G.words[r.wi]), el('td', 'mono', String(r.shared)), el('td', 'mono', r.fits ? r.text.slice(0, r.need) : 'none'));
+    mine.forEach((r) => {
+      const tr = el('tr', (chosen.has(r) ? 'chosen' : '') + (r === cur ? ' cur' : ''));
+      tr.append(el('td', 'mono', r.text), el('td', 'mono', String(r.shared)), el('td', 'mono', r.fits ? r.text.slice(0, r.need) : 'none'));
       body.appendChild(tr);
     });
-    tbl.appendChild(body);
+    mini.appendChild(body);
+    const ans = answers[sortWord];
+    const bestRow = mine.find((r) => chosen.has(r));
+    $('sort-result').textContent = ans ? 'The shortest piece for ' + G.words[sortWord] + ' is \u201c' + ans + '\u201d, from the ending \u201c' + bestRow.text + '\u201d. The highlighted row marks it.' : G.words[sortWord] + ' has no piece of its own, so it gets no answer.';
     const loop = runToEnd(G.words, 'contains', 'unique', 'scan').answers;
     const same = JSON.stringify(answers) === JSON.stringify(loop);
-    $('sort-note').textContent = 'Highlighted rows are the ones each word keeps: ' + G.words.map((w, j) => w + ' → ' + (answers[j] ? '“' + answers[j] + '”' : 'none')).join(', ') + '. ' + (same ? 'These are exactly the answers the loop found.' : 'These differ from the loop, which should not happen.');
+    $('sort-note').textContent = 'For all your words this method gives: ' + G.words.map((w, j) => w + ' \u2192 ' + (answers[j] ? '\u201c' + answers[j] + '\u201d' : 'none')).join(', ') + '. ' + (same ? 'These are exactly the answers the loop found.' : 'These differ from the loop, which should not happen.');
   }
+  $('sort-pick').addEventListener('change', (e) => { sortWord = +e.target.value; sortStep = 0; drawSort(true); });
+  $('sort-prev').addEventListener('click', () => { sortStep = Math.max(0, sortStep - 1); drawSort(true); });
+  $('sort-next').addEventListener('click', () => { sortStep++; drawSort(true); });
 
   /* ---------- start up ---------- */
   const walkScan = makeWalk($('walk-scan'), { getCfg: () => ({ match: 'contains', goal: 'unique', counter: 'scan' }), full: false });
@@ -1097,7 +1199,7 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
   $('words').addEventListener('input', () => { clearTimeout(wordsTimer); wordsTimer = setTimeout(() => setWords($('words').value), 150); });
 
   onWords(() => { ixAdded = 0; });
-  onWords(drawSlow); onWords(drawIndex); onWords(drawCosts); onWords(drawChart); onWords(drawSort);
+  onWords(drawSlow); onWords(drawIndex); onWords(drawCosts); onWords(drawChart); onWords(resetSort); onWords(() => drawSort(false));
   onWords(() => { walkScan.reset(); walkIndex.reset(); walkPlay.reset(); drawPlayCost(); });
   $('words').value = PRESETS[0][1];
   drawBlurbs();
