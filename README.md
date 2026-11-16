@@ -14,6 +14,7 @@ Each explainer is a single standalone HTML file in its own folder, so its addres
 | [Just enough letters](shortest-unique-identifiers/) | The fewest letters that pick out one word from a list. Swap how a search matches (contains, starts with, letters in order), what you are looking for, and how matches are counted, then watch the answers and the work change. |
 | [Shared beginnings](tries/) | Tries: a tree that stores each shared beginning once. Build one letter by letter, look words up, count what it saves, then squash it into a suffix tree. |
 | [Nearly the same](fuzzy-hashing/) | Fuzzy hashing: why an ordinary hash cannot spot near-copies of a message, and how shingles, MinHash and banding find a whole mailing campaign without comparing every pair. Uses made-up messages only. |
+| [Best match first](fuzzy-finding/) | How a fuzzy finder ranks its matches: choosing which letters match, scoring them, finding the best placement with dynamic programming, and staying fast on thousands of items. Uses made-up file names only. |
 
 More explainers will be added as new folders, and listed in [`index.html`](index.html).
 
