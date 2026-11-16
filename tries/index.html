@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Shared Beginnings</title>
+<meta name="description" content="An interactive explainer of tries: a tree that stores each shared beginning once. Build one letter by letter, look words up, count what it saves, then squash it into a suffix tree.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: a single reading column that builds the idea in stages. Each stage ends in a small workbench you can poke. */
+:root {
+  --bg: #eceff2;
+  --surface: #fbfcfd;
+  --cell: #f0f3f5;
+  --ink: #16212b;
+  --muted: #55646f;
+  --line: #cdd5dc;
+  --accent: #2b2bd6;
+  --accent-soft: #e3e3fb;
+  --on-accent: #ffffff;
+  --hit: #f2b01e;
+  --code-bg: #15222c;
+  --code-ink: #d8e2ea;
+  --code-cm: #7f93a3;
+  --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
+    --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --hit: #f5b83d;
+    --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
+  --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --hit: #f5b83d;
+  --code-bg: #0b1117;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px));
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 500; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field > .lab, .lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+input[type="text"] { font: inherit; font-family: var(--font-mono); font-size: 15px; width: 100%; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
+.seg label:last-of-type { border-right: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 18px; height: 18px; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.status { min-height: 3.2em; font-weight: 500; }
+
+.words { display: flex; flex-direction: column; gap: 6px; }
+.wrow { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 4px 8px; border: 2px solid transparent; border-radius: 8px; }
+.wrow.dim .tiles { opacity: .4; }
+.wrow .idx { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.tiles { display: flex; flex-wrap: wrap; gap: 4px; }
+.t { width: 28px; height: 34px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 17px; font-weight: 500; background: var(--cell); border: 2px solid var(--line); border-radius: 4px; }
+.t.hit { background: var(--hit); border-color: var(--hit); color: #16212b; font-weight: 700; }
+.chip { font-family: var(--font-mono); font-size: 13px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--cell); min-width: 4em; text-align: center; white-space: nowrap; }
+.chip.yes { border-color: var(--accent); font-weight: 700; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* the tree */
+.treebox { overflow: auto; max-height: 520px; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); padding: 6px; }
+svg.tree { display: block; }
+svg.tree text { font-family: var(--font-mono); font-size: 13px; fill: var(--ink); }
+svg.tree text.cnt { font-size: 11px; fill: var(--muted); }
+svg.tree .edge { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+svg.tree .edge.path { stroke: var(--hit); stroke-width: 4; }
+svg.tree .edge.fresh { stroke: var(--accent); stroke-width: 4; }
+svg.tree .n { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+svg.tree .n.end { stroke: var(--accent); stroke-width: 3.5; }
+svg.tree .n.root { fill: var(--ink); stroke: var(--ink); }
+svg.tree .n.path { fill: var(--hit); stroke: var(--hit); }
+svg.tree .n.fresh { fill: var(--accent); stroke: var(--accent); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 2px solid var(--muted); background: var(--surface); }
+
+.pc { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px 2px 8px; border: 2px solid var(--line); border-radius: 6px; background: var(--cell); font-family: var(--font-mono); font-size: 14px; }
+.pc i { font-style: normal; font-size: 11px; background: var(--line); color: var(--ink); border-radius: 999px; padding: 0 6px; }
+.pc.uniq { border-color: var(--accent); }
+.pc.uniq i { background: var(--accent); color: var(--on-accent); }
+.pc.pick { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.pc.pick i { background: var(--on-accent); color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; }
+td.mono { font-family: var(--font-mono); font-weight: 400; }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+
+@media (max-width: 920px) { dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .t { width: 24px; height: 30px; font-size: 15px; } .wrow { grid-template-columns: minmax(0, 1fr) auto; } .wrow .idx { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>Shared beginnings</h1>
+    <p class="lead">Many words start the same way. A trie is a tree that stores each shared beginning once. This page builds one a letter at a time, uses it to find words by their start, counts what it saves, and then squashes it into the structure behind suffix trees.</p>
+  </header>
+
+  <section aria-labelledby="h-list">
+    <h2 id="h-list">Finding words by their start</h2>
+    <p>Suppose you have a list of words and want every word that starts with the letters someone has typed. The obvious way is to look at every word in the list and compare its first letters with the prefix. Type a prefix below and watch how many letters get examined.</p>
+    <div class="panel">
+      <label class="field" for="words"><span class="lab">Your words (up to 30, up to 12 letters each). Everything below uses them.</span><input type="text" id="words" autocomplete="off" spellcheck="false"></label>
+      <div class="row" id="presets" role="group" aria-label="Preset word lists"></div>
+      <p class="note" id="trim" hidden></p>
+    </div>
+    <div class="panel">
+      <label class="field" for="scan"><span class="lab">Type a prefix</span><input type="text" id="scan" autocomplete="off" spellcheck="false" placeholder="for example: te"></label>
+      <div class="words" id="scan-rows"></div>
+      <div class="status" id="scan-status" role="status" aria-live="polite"></div>
+    </div>
+    <p>Every word is examined every time, even the ones that obviously cannot match. With six words that hardly matters. With six hundred thousand it matters a great deal. A trie is a way of not looking at most of them.</p>
+  </section>
+
+  <section aria-labelledby="h-build">
+    <h2 id="h-build">A tree of letters</h2>
+    <p>Draw the words as paths. Start at an empty root. To add <code>tea</code>, follow a branch labelled <code>t</code> (making it if it is not there), then <code>e</code>, then <code>a</code>. To add <code>ted</code> afterwards, the <code>t</code> and <code>e</code> branches already exist, so follow them and only make the <code>d</code>. Words that start the same way share the start. A ringed node marks the place where a word ends.</p>
+    <p>Add the words one at a time and watch the sharing.</p>
+    <div class="panel">
+      <div class="row">
+        <button class="btn primary" type="button" id="b-next">Insert the next word</button>
+        <button class="btn" type="button" id="b-all">Insert them all</button>
+        <button class="btn" type="button" id="b-reset">Start again</button>
+      </div>
+      <div class="status" id="b-status" role="status" aria-live="polite"></div>
+      <div class="treebox" id="b-tree"></div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="dot" style="background:var(--accent);border-color:var(--accent)"></i>New node</span>
+        <span><i class="dot" style="background:var(--hit);border-color:var(--hit)"></i>Reused on the way</span>
+        <span><i class="dot" style="border-color:var(--accent);border-width:3.5px"></i>A word ends here</span>
+      </div>
+    </div>
+    <p>The code that does this is short. Each node holds its children (a map from a letter to the next node), a count of how many words pass through it, and a flag for whether a word ends there.</p>
+    <details open>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="trie-code"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-look">
+    <h2 id="h-look">Looking things up</h2>
+    <p>To find every word that starts with a prefix, walk down the tree one letter at a time. If a letter has no branch, nothing starts that way. If you arrive at a node, every word below it starts with your prefix, and collecting them is the autocomplete. The number of steps depends on the length of the prefix, and not at all on how many words there are.</p>
+    <div class="panel">
+      <label class="field" for="look"><span class="lab">Type a prefix</span><input type="text" id="look" autocomplete="off" spellcheck="false" placeholder="for example: te"></label>
+      <div class="treebox" id="l-tree"></div>
+      <div class="readout">
+        <div><span class="k">Trie: steps down the tree</span><span class="v" id="l-steps">0</span></div>
+        <div><span class="k">List: letters examined</span><span class="v" id="l-list">0</span></div>
+      </div>
+      <div class="status" id="l-status" role="status" aria-live="polite"></div>
+    </div>
+    <p class="note">Collecting the words below the node takes time proportional to how many there are, so the trie's advantage is in not wading through the words that cannot match.</p>
+  </section>
+
+  <section aria-labelledby="h-count">
+    <h2 id="h-count">Counting at the nodes</h2>
+    <p>Each node also keeps a count of how many words pass through it. That count answers questions for free. The number beside a node is how many words start with the letters on the path to it. A node whose count is 1 has only one word below it, so the path to it is enough to pick that word out. The first such node on a word's path gives its <strong>shortest unique prefix</strong>, which is exactly the <em>Starts with</em> rule from <a href="../shortest-unique-identifiers/">Just enough letters</a>.</p>
+    <div class="treebox" id="c-tree"></div>
+    <div class="tablewrap"><table id="c-table"></table></div>
+    <p class="note" id="c-note"></p>
+  </section>
+
+  <section aria-labelledby="h-cost">
+    <h2 id="h-cost">What it saves, and what it costs</h2>
+    <p>A flat list stores every letter of every word. A trie stores one letter for each node, and shared beginnings are stored once. When many words share their starts the trie holds fewer letters. When none do, it holds exactly as many, plus the cost of the links between nodes. Real memory depends on how those links are stored, so fewer letters is not always fewer bytes.</p>
+    <div class="tablewrap"><table id="cost-table"></table></div>
+    <p class="note">The same comparison, for the index on the other page, is in the memory part of <a href="../shortest-unique-identifiers/#h-cost">Scan or index?</a>. That index holds every piece of every word, so a trie saves far more there than it does here.</p>
+  </section>
+
+  <section aria-labelledby="h-squash">
+    <h2 id="h-squash">Squashing it</h2>
+    <p>Many nodes have only one child. A path of such nodes can be squashed into a single edge labelled with all its letters. The result is called a <strong>compressed trie</strong>, or radix tree. It has fewer nodes and holds the same words, and the saving grows as words get longer and branch less.</p>
+    <p>Now a bigger idea. Instead of the words themselves, put every <em>ending</em> of every word into the trie: <code>banana</code> gives <code>banana</code>, <code>anana</code>, <code>nana</code> and so on. A trie of all the endings contains every piece of every word as a path from the root, and squashing it gives a <strong>suffix tree</strong>. That is the structure the sorting method on the other page was standing in for. Try both views, and try a single longer word such as <code>banana</code>, where squashing saves the most.</p>
+    <div class="panel">
+      <div class="row">
+        <div class="field"><span class="lab" id="lab-sq-src">What goes in</span><div class="seg" role="radiogroup" aria-labelledby="lab-sq-src" id="sq-src"></div></div>
+        <label class="check"><input type="checkbox" id="sq-on"> Squash single paths</label>
+      </div>
+      <div class="treebox" id="s-tree"></div>
+      <p class="status" id="s-status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-parts">
+    <h2 id="h-parts">The parts you can swap</h2>
+    <p>As on the other pages, the walk down the tree stays the same while two choices change what the tree can do.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
+        <tbody>
+          <tr><td>What a node stores</td><td>An end flag, a count, a list of words</td><td>Whether it can answer &ldquo;is this a word&rdquo;, &ldquo;how many start this way&rdquo; (as above), or &ldquo;which ones&rdquo; without walking further.</td></tr>
+          <tr><td>How children are held</td><td>A map, a fixed array, a sorted list</td><td>Speed of each step against memory per node. A fixed array of 26 slots is fast but wasteful when most are empty.</td></tr>
+          <tr><td>Whether to squash</td><td>Plain, or compressed</td><td>Far fewer nodes, at the price of splitting an edge when a new word diverges halfway along it.</td></tr>
+          <tr><td>What goes in</td><td>Whole words, or every ending</td><td>A dictionary of words, or an index of every piece of every word (a suffix tree once squashed).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Radix tree</dt><dd>Another name for a compressed trie, used where memory matters.</dd></div>
+      <div><dt>Ternary search tree</dt><dd>A leaner relative of the trie that holds each node's children as a small search tree.</dd></div>
+      <div><dt>DAWG</dt><dd>A directed acyclic word graph also shares word <em>endings</em>, not only beginnings, so a whole dictionary fits in very little space.</dd></div>
+      <div><dt>Aho&ndash;Corasick</dt><dd>Adds links between the branches of a trie so that many patterns can be matched against a text in one pass.</dd></div>
+      <div><dt>Longest-prefix match</dt><dd>Routers use trie-like structures to find the most specific rule that matches an address. This is from general knowledge and worth checking before you rely on it.</dd></div>
+      <div><dt>Suffix tree and suffix array</dt><dd>The structures behind the previous page's sorted endings. See <a href="../shortest-unique-identifiers/">Just enough letters</a>.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>A trie stores each shared beginning once, with a path of letters for each word.</li>
+      <li>Looking up a prefix is a walk down the tree, so its cost depends on the length of the prefix and not the size of the list.</li>
+      <li>A count at each node answers &ldquo;how many words start this way&rdquo;, and the first node with a count of 1 gives a word's shortest unique prefix.</li>
+      <li>Squashing single paths gives a compressed trie, and a squashed trie of all the endings is a suffix tree.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const MAX_WORDS = 30, MAX_LEN = 12;
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+
+  /* ---------- the trie (displayed and run as written) ---------- */
+  const makeNode = () => {
+    return { kids: new Map(), count: 0, end: false };
+  };
+
+  function insert(root, word) {
+    const path = [];
+    let node = root;
+    for (const letter of word) {
+      if (!node.kids.has(letter)) node.kids.set(letter, makeNode());
+      node = node.kids.get(letter);
+      node.count++; // one more word passes through here
+      path.push(node);
+    }
+    node.end = true; // a word finishes here
+    return path;
+  }
+
+  function walk(root, prefix) {
+    let node = root, steps = 0;
+    for (const letter of prefix) {
+      steps++;
+      node = node.kids.get(letter);
+      if (!node) return { node: null, steps };
+    }
+    return { node, steps };
+  }
+
+  function* wordsBelow(node, soFar) {
+    if (node.end) yield soFar;
+    const kids = [...node.kids].sort(([a], [b]) => (a < b ? -1 : 1));
+    for (const [letter, kid] of kids) yield* wordsBelow(kid, soFar + letter);
+  }
+
+  function shortestUnique(root, word) {
+    let node = root;
+    for (let i = 0; i < word.length; i++) {
+      node = node.kids.get(word[i]);
+      if (node.count === 1) return word.slice(0, i + 1);
+    }
+    return null;
+  }
+
+  /* ---------- words, shared by every widget ---------- */
+  const PRESETS = [
+    ['Classic', 'tea ted ten to in inn'],
+    ['Cars', 'car card care careful cart cat'],
+    ['Cities', 'paris parma perth porto prague rome rouen riga'],
+    ['Months', 'january june july march may april august'],
+    ['Big list', 'apple apply ape art arc bat bar barn bank bake cat cap card care dog door dot dock eat ear east fan far farm fast gold gone good goat game']
+  ];
+  const G = { words: [] };
+  const listeners = [];
+  const onWords = (f) => listeners.push(f);
+  function parseWords(text) {
+    const seen = new Set(), out = [];
+    let trimmed = false;
+    for (const raw of text.toLowerCase().split(/[\s,]+/)) {
+      if (!raw) continue;
+      let w = raw;
+      if (w.length > MAX_LEN) { w = w.slice(0, MAX_LEN); trimmed = true; }
+      if (seen.has(w)) continue;
+      if (out.length >= MAX_WORDS) { trimmed = true; break; }
+      seen.add(w); out.push(w);
+    }
+    return { words: out, trimmed };
+  }
+  function setWords(text) {
+    const p = parseWords(text);
+    G.words = p.words;
+    $('trim').hidden = !p.trimmed;
+    $('trim').textContent = p.trimmed ? 'Some words were shortened or left out to keep the page quick.' : '';
+    listeners.forEach((f) => f());
+  }
+  const trieOf = (words) => {
+    const root = makeNode();
+    words.forEach((w) => insert(root, w));
+    return root;
+  };
+  const endingsOf = (words) => words.flatMap((w) => Array.from({ length: w.length }, (_, s) => w.slice(s)));
+
+  function makeTiles(word, marks) {
+    const tiles = el('div', 'tiles');
+    [...word].forEach((letter, k) => {
+      const t = el('span', 't' + (marks && marks.includes(k) ? ' hit' : ''), letter);
+      t.setAttribute('aria-hidden', 'true');
+      tiles.appendChild(t);
+    });
+    return tiles;
+  }
+
+  /* ---------- drawing a trie ---------- */
+  function buildView(root, compress) {
+    const make = (node, label) => {
+      let n = node, text = label;
+      if (compress) {
+        while (n.kids.size === 1 && !n.end && n !== root) {
+          const [[letter, kid]] = n.kids;
+          text += letter; n = kid;
+        }
+      }
+      const v = { label: text, node: n, kids: [] };
+      [...n.kids].sort(([a], [b]) => (a < b ? -1 : 1)).forEach(([letter, kid]) => v.kids.push(make(kid, letter)));
+      return v;
+    };
+    return make(root, '');
+  }
+  function countView(v) { return 1 + v.kids.reduce((a, k) => a + countView(k), 0); }
+  function renderTree(box, root, opts) {
+    const o = opts || {};
+    box.textContent = '';
+    const view = buildView(root, !!o.compress);
+    const DY = 40, M = 26, edgeLen = (label) => Math.max(52, 11 * label.length + 30);
+    let row = 0, maxX = 0;
+    const assign = (v, x) => {
+      v.x = x; maxX = Math.max(maxX, x);
+      if (!v.kids.length) v.y = row++;
+      else { v.kids.forEach((k) => assign(k, x + edgeLen(k.label))); v.y = (v.kids[0].y + v.kids[v.kids.length - 1].y) / 2; }
+    };
+    assign(view, 0);
+    const W = M * 2 + maxX + 40, H = M * 2 + Math.max(row - 1, 0) * DY + 8;
+    const NS = 'http://www.w3.org/2000/svg';
+    const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; return e; };
+    const svg = mk('svg', { width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, class: 'tree', role: 'img', 'aria-label': 'A trie with ' + countView(view) + ' nodes.' });
+    const X = (v) => M + v.x, Y = (v) => M + v.y * DY;
+    const edges = mk('g'), nodes = mk('g');
+    const draw = (v) => {
+      v.kids.forEach((k) => {
+        const cls = o.fresh && o.fresh.has(k.node) ? ' fresh' : (o.path && o.path.has(k.node) ? ' path' : '');
+        edges.appendChild(mk('line', { x1: X(v), y1: Y(v), x2: X(k), y2: Y(k), class: 'edge' + cls }));
+        edges.appendChild(mk('text', { x: X(v) + (X(k) - X(v)) * 0.62, y: Y(v) + (Y(k) - Y(v)) * 0.62 - 7, 'text-anchor': 'middle' }, k.label));
+        draw(k);
+      });
+      const isRoot = v === view;
+      const cls = 'n' + (isRoot ? ' root' : '') + (v.node.end && !isRoot ? ' end' : '') + (o.fresh && o.fresh.has(v.node) ? ' fresh' : (o.path && o.path.has(v.node) ? ' path' : ''));
+      nodes.appendChild(mk('circle', { cx: X(v), cy: Y(v), r: isRoot ? 7 : 6, class: cls }));
+      if (o.counts && !isRoot) nodes.appendChild(mk('text', { x: X(v) + 10, y: Y(v) + 17, class: 'cnt' }, String(v.node.count)));
+    };
+    draw(view);
+    svg.append(edges, nodes);
+    box.appendChild(svg);
+    return countView(view) - 1;
+  }
+
+  /* ---------- section 1: scanning a list ---------- */
+  function examine(word, prefix) {
+    let n = 0;
+    for (let i = 0; i < prefix.length; i++) {
+      n++;
+      if (i >= word.length || word[i] !== prefix[i]) return { n, ok: false };
+    }
+    return { n, ok: true };
+  }
+  function drawScan() {
+    const q = $('scan').value.trim().toLowerCase();
+    const rows = $('scan-rows');
+    rows.textContent = '';
+    let total = 0, matches = 0;
+    G.words.forEach((w, j) => {
+      const r = q ? examine(w, q) : { n: 0, ok: false };
+      total += r.n; if (r.ok) matches++;
+      const row = el('div', 'wrow' + (q && !r.ok ? ' dim' : ''));
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', w + (r.ok ? ': starts with ' + q : ''));
+      row.append(el('span', 'idx', String(j + 1)), makeTiles(w, r.ok ? Array.from({ length: q.length }, (_, k) => k) : null), el('span', 'chip' + (r.ok ? ' yes' : ''), q ? r.n + (r.n === 1 ? ' letter' : ' letters') : '–'));
+      rows.appendChild(row);
+    });
+    $('scan-status').textContent = !G.words.length ? 'Type some words above.' : (!q ? 'Type a prefix to see which words start with it.' :
+      plural(matches, 'word starts', 'words start') + ' with “' + q + '”. The list examined ' + plural(total, 'letter', 'letters') + ' to find out.');
+  }
+  $('scan').addEventListener('input', drawScan);
+  onWords(drawScan);
+
+  /* ---------- section 2: building it ---------- */
+  let built = 0;
+  function drawBuild() {
+    built = Math.min(built, G.words.length);
+    const prior = trieOf(G.words.slice(0, Math.max(0, built - 1)));
+    let path = [], root = prior;
+    if (built > 0) path = insert(prior, G.words[built - 1]);
+    const fresh = new Set(path.filter((n) => n.count === 1)), reused = new Set(path.filter((n) => n.count > 1));
+    const nodes = renderTree($('b-tree'), root, { path: reused, fresh });
+    $('b-next').disabled = built >= G.words.length; $('b-all').disabled = built >= G.words.length;
+    if (!G.words.length) { $('b-status').textContent = 'Type some words at the top of the page.'; return; }
+    if (!built) { $('b-status').textContent = 'The tree is empty: just a root. Insert the first word.'; return; }
+    const w = G.words[built - 1];
+    const newLetters = [...w].filter((_, i) => path[i].count === 1), oldLetters = [...w].filter((_, i) => path[i].count > 1);
+    const parts = [];
+    if (oldLetters.length) parts.push('reused the path for “' + oldLetters.join('') + '”');
+    if (newLetters.length) parts.push('added ' + plural(newLetters.length, 'new node', 'new nodes') + ' for “' + newLetters.join('') + '”');
+    $('b-status').textContent = 'Inserted “' + w + '” (' + built + ' of ' + G.words.length + '). ' +
+      (parts.length ? 'It ' + parts.join(' and ') + '. ' : '') +
+      (newLetters.length ? '' : 'No new nodes were needed, since it is already a prefix of an earlier word. ') +
+      'The tree has ' + nodes + ' nodes below the root.';
+  }
+  $('b-next').addEventListener('click', () => { built++; drawBuild(); });
+  $('b-all').addEventListener('click', () => { built = G.words.length; drawBuild(); });
+  $('b-reset').addEventListener('click', () => { built = 0; drawBuild(); });
+  onWords(() => { built = 0; drawBuild(); });
+
+  /* ---------- the code panel ---------- */
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|yield|new|null|true|false)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  [['makeNode', 'a node: its children, a count and an end flag', 'const makeNode = ' + dedent(makeNode.toString())],
+   ['insert', 'add a word, one letter at a time', dedent(insert.toString())],
+   ['walk', 'follow a prefix down the tree', dedent(walk.toString())],
+   ['wordsBelow', 'collect every word below a node', dedent(wordsBelow.toString())],
+   ['shortestUnique', 'the first node on the path with a count of 1', dedent(shortestUnique.toString())]].forEach(([name, tag, src]) => {
+    const d = el('div', 'fn');
+    d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+    d.appendChild(codeBlock(src));
+    $('trie-code').appendChild(d);
+  });
+
+  /* ---------- section 3: looking things up ---------- */
+  function pathNodes(root, prefix) {
+    const nodes = new Set();
+    let node = root;
+    for (const letter of prefix) { node = node.kids.get(letter); if (!node) break; nodes.add(node); }
+    return nodes;
+  }
+  function drawLook() {
+    const q = $('look').value.trim().toLowerCase();
+    const root = trieOf(G.words);
+    renderTree($('l-tree'), root, { path: pathNodes(root, q) });
+    let listCost = 0;
+    G.words.forEach((w) => { if (q) listCost += examine(w, q).n; });
+    if (!G.words.length) { $('l-status').textContent = 'Type some words at the top of the page.'; $('l-steps').textContent = '0'; $('l-list').textContent = '0'; return; }
+    if (!q) { $('l-steps').textContent = '0'; $('l-list').textContent = '0'; $('l-status').textContent = 'Type a prefix. The path it follows lights up in yellow.'; return; }
+    const r = walk(root, q);
+    $('l-steps').textContent = String(r.steps); $('l-list').textContent = String(listCost);
+    if (!r.node) $('l-status').textContent = 'The walk fell off the tree after ' + plural(r.steps, 'step', 'steps') + ', so no word starts with “' + q + '”.';
+    else {
+      const found = [...wordsBelow(r.node, q)];
+      $('l-status').textContent = 'Arrived after ' + plural(r.steps, 'step', 'steps') + '. ' + plural(found.length, 'word starts', 'words start') + ' with “' + q + '”: ' + found.join(', ') + '.';
+    }
+  }
+  $('look').addEventListener('input', drawLook);
+  onWords(drawLook);
+
+  /* ---------- section 4: counting at the nodes ---------- */
+  function drawCounts() {
+    const root = trieOf(G.words);
+    renderTree($('c-tree'), root, { counts: true });
+    const tbl = $('c-table');
+    tbl.textContent = '';
+    if (!G.words.length) { $('c-note').textContent = ''; return; }
+    tbl.innerHTML = '<thead><tr><th>Word</th><th>Count at each letter along its path</th><th>Shortest unique prefix</th></tr></thead>';
+    const body = el('tbody');
+    let agree = true;
+    G.words.forEach((w) => {
+      const tr = el('tr');
+      const chips = el('div', 'chips');
+      let node = root, seen1 = false;
+      [...w].forEach((letter) => {
+        node = node.kids.get(letter);
+        const c = el('span', 'pc' + (node.count === 1 ? (seen1 ? ' uniq' : ' pick') : ''));
+        if (node.count === 1) seen1 = true;
+        c.append(el('b', null, letter), el('i', null, String(node.count)));
+        chips.appendChild(c);
+      });
+      const ans = shortestUnique(root, w);
+      let brute = null;
+      for (let len = 1; len <= w.length && !brute; len++) if (G.words.filter((x) => x.startsWith(w.slice(0, len))).length === 1) brute = w.slice(0, len);
+      if (brute !== ans) agree = false;
+      const td1 = el('td', 'mono', w), td2 = el('td'), td3 = el('td', 'mono', ans || 'none');
+      td2.appendChild(chips);
+      tr.append(td1, td2, td3);
+      body.appendChild(tr);
+    });
+    tbl.appendChild(body);
+    $('c-note').textContent = (agree ? 'These match a brute-force check that tries every prefix against every word. ' : 'These differ from a brute-force check, which should not happen. ') + 'A word with no unique prefix is itself the start of a longer word, so every prefix of it is shared.';
+  }
+  onWords(drawCounts);
+
+  /* ---------- section 5: what it saves ---------- */
+  function drawCost() {
+    const tbl = $('cost-table');
+    tbl.textContent = '';
+    if (!G.words.length) return;
+    const root = trieOf(G.words);
+    const letters = G.words.reduce((a, w) => a + w.length, 0);
+    const holder = document.createElement('div');
+    const nodes = renderTree(holder, root, {});
+    const squashed = renderTree(holder, root, { compress: true });
+    tbl.innerHTML = '<thead><tr><th>Structure</th><th>What it holds for your words</th></tr></thead>';
+    const body = el('tbody');
+    [['Flat list', plural(G.words.length, 'word', 'words') + ' holding ' + letters + ' letters in total.'],
+     ['Trie', nodes + ' nodes, one letter each' + (nodes < letters ? '. That is ' + (letters - nodes) + ' fewer letters than the list, because words share beginnings.' : '. No saving here, because no two words share a beginning.')],
+     ['Squashed trie', squashed + ' nodes, with the same ' + nodes + ' letters carried on the edges. The saving is in nodes, and so in links.']].forEach(([a, b]) => {
+      const tr = el('tr'); tr.append(el('td', null, a), el('td', null, b)); body.appendChild(tr);
+    });
+    tbl.appendChild(body);
+  }
+  onWords(drawCost);
+
+  /* ---------- section 6: squashing ---------- */
+  let sqSource = 'words';
+  const SOURCES = { words: { name: 'The words' }, endings: { name: 'Every ending' } };
+  Object.entries(SOURCES).forEach(([key, v]) => {
+    $('sq-src').insertAdjacentHTML('beforeend', '<input type="radio" name="sqsrc" id="sqsrc-' + key + '" value="' + key + '"' + (key === sqSource ? ' checked' : '') + '><label for="sqsrc-' + key + '">' + esc(v.name) + '</label>');
+  });
+  function drawSquash() {
+    const items = sqSource === 'words' ? G.words : endingsOf(G.words);
+    const box = $('s-tree');
+    if (!G.words.length) { box.textContent = ''; $('s-status').textContent = 'Type some words at the top of the page.'; return; }
+    const letters = G.words.reduce((a, w) => a + w.length, 0);
+    if (sqSource === 'endings' && letters > 60) { box.textContent = ''; $('s-status').textContent = 'That would be too big to draw. Use fewer or shorter words, such as the Classic or Cars presets.'; return; }
+    const root = trieOf(items);
+    const holder = document.createElement('div');
+    const plain = renderTree(holder, root, {});
+    const nodes = renderTree(box, root, { compress: $('sq-on').checked });
+    $('s-status').textContent = (sqSource === 'words' ? 'The trie of your words' : 'The trie of every ending of every word, which holds every piece of every word as a path from the root') +
+      ' has ' + plain + ' nodes' + ($('sq-on').checked ? '. Squashed, it has ' + nodes + '.' : '. Tick the box to squash single paths.') +
+      (sqSource === 'endings' && $('sq-on').checked ? ' This is a suffix tree for your words, apart from a few details a full version needs.' : '');
+  }
+  $('sq-src').addEventListener('change', (e) => { sqSource = e.target.value; drawSquash(); });
+  $('sq-on').addEventListener('change', drawSquash);
+  onWords(drawSquash);
+
+  /* ---------- start up ---------- */
+  PRESETS.forEach(([label, text]) => {
+    const b = el('button', 'btn small', label); b.type = 'button';
+    b.addEventListener('click', () => { $('words').value = text; setWords(text); });
+    $('presets').appendChild(b);
+  });
+  let wordsTimer = 0;
+  $('words').addEventListener('input', () => { clearTimeout(wordsTimer); wordsTimer = setTimeout(() => setWords($('words').value), 150); });
+  $('words').value = PRESETS[0][1];
+  setWords($('words').value);
+  built = 3; drawBuild();
+  $('scan').value = 'te'; drawScan();
+  $('look').value = 'te'; drawLook();
+})();
+</script>
+</body>
+</html>
