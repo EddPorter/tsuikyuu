@@ -6,21 +6,21 @@ Published at <https://eddporter.com/tsuikyuu/>.
 
 ## Explainers
 
-Each explainer is a single standalone HTML file in [`explainers/`](explainers). There is no build step and no dependency beyond Google Fonts. Open the file in a browser, or serve the folder with any static web server.
+Each explainer is a single standalone HTML file in its own folder, so its address has no `.html` on the end. There is no build step and no dependency beyond Google Fonts. Open the file in a browser, or serve the repository with any static web server.
 
 | Explainer | What it shows |
 | --- | --- |
-| [One loop, many searches](explainers/one-loop-many-searches.html) | Breadth-first, depth-first, cheapest-first (Dijkstra), greedy and A* are one search loop with a different `removeChoice` function. Paint walls and mud on a map and watch each strategy run. |
-| [Just enough letters](explainers/shortest-unique-identifiers.html) | The fewest letters that pick out one word from a list. Swap how a search matches (contains, starts with, letters in order), what you are looking for, and how matches are counted, then watch the answers and the work change. |
+| [One loop, many searches](one-loop-many-searches/) | Breadth-first, depth-first, cheapest-first (Dijkstra), greedy and A* are one search loop with a different `removeChoice` function. Paint walls and mud on a map and watch each strategy run. |
+| [Just enough letters](shortest-unique-identifiers/) | The fewest letters that pick out one word from a list. Swap how a search matches (contains, starts with, letters in order), what you are looking for, and how matches are counted, then watch the answers and the work change. |
 
-More explainers will be added to the same folder, and listed in [`index.html`](index.html).
+More explainers will be added as new folders, and listed in [`index.html`](index.html).
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
 | `index.html` | The landing page that lists the explainers |
-| `explainers/` | One HTML file per explainer |
+| `<name>/index.html` | One folder per explainer, each holding a single HTML file |
 | `.nojekyll` | Stops GitHub Pages running Jekyll over the site |
 
 ## Licence
