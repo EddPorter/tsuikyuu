@@ -255,9 +255,9 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
 
   <section aria-labelledby="h-next">
     <h2 id="h-next">Where to go next</h2>
-    <p>Names to search for. They are pointers, not explanations, and the notes about particular tools are from memory, so check them before relying on them.</p>
+    <p>Names to search for. They are pointers, not explanations.</p>
     <dl class="lines">
-      <div><dt>Myers&rsquo; diff algorithm</dt><dd>A faster method that does work in proportion to the number of changes, so two nearly identical files are cheap. I recall that it is the basis of the default in git, but check that.</dd></div>
+      <div><dt>Myers&rsquo; diff algorithm</dt><dd>A faster method that does work in proportion to the number of changes, so two nearly identical files are cheap. Git&rsquo;s documentation lists it as the default algorithm, alongside <code>minimal</code>, <code>patience</code> and <code>histogram</code> options.</dd></div>
       <div><dt>Hirschberg&rsquo;s algorithm</dt><dd>Finds the same answer as the grid while keeping only a couple of rows in memory, by splitting the problem in half repeatedly.</dd></div>
       <div><dt>Patience and histogram diff</dt><dd>Variants that anchor on lines occurring exactly once, which often give diffs that read better for source code, even when they are not the shortest.</dd></div>
       <div><dt>Needleman&ndash;Wunsch, Smith&ndash;Waterman</dt><dd>The same grid applied to DNA and protein sequences, with scores for matches and gaps. A close relative of the scoring grid on <a href="../fuzzy-finding/">Best match first</a>.</dd></div>

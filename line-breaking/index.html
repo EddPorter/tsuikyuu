@@ -168,11 +168,11 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
 
   <section aria-labelledby="h-real">
     <h2 id="h-real">What the real thing adds</h2>
-    <p>This page uses the idea in a stripped-down form. The details below are from my memory of the Knuth&ndash;Plass paper and of how TeX is described, so check them before relying on them.</p>
+    <p>This page uses the idea in a stripped-down form. The real algorithm is described in the Knuth&ndash;Plass paper, &ldquo;Breaking Paragraphs into Lines&rdquo;, in <em>Software: Practice and Experience</em>, 1981.</p>
     <dl class="lines">
       <div><dt>Stretchy gaps</dt><dd>Each space has a natural width and amounts it may stretch or shrink. A line&rsquo;s cost depends on how far its gaps must go from natural, not on a count of characters.</dd></div>
       <div><dt>Penalties and hyphens</dt><dd>Some places are allowed breaks at a cost: after a hyphen, or inside a word if hyphenation is allowed. Others are discouraged, such as leaving a single word alone on the last line.</dd></div>
-      <div><dt>Looking only at sensible breaks</dt><dd>It keeps a list of the break points that are still worth extending and drops the rest, so the work stays manageable for a whole page of text.</dd></div>
+      <div><dt>Looking only at sensible breaks</dt><dd>It keeps only the break points that can still lead to an acceptable line, so the work stays manageable for a whole page of text.</dd></div>
       <div><dt>Paragraph, not page</dt><dd>It breaks one paragraph at a time. Breaking paragraphs across pages is a separate problem with its own rules.</dd></div>
     </dl>
   </section>
@@ -194,11 +194,11 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
 
   <section aria-labelledby="h-next">
     <h2 id="h-next">Where to go next</h2>
-    <p>Names to search for. They are pointers, not explanations, and the remarks about particular products are from memory.</p>
+    <p>Names to search for. They are pointers, not explanations.</p>
     <dl class="lines">
       <div><dt>The Knuth&ndash;Plass paper</dt><dd>&ldquo;Breaking Paragraphs into Lines&rdquo;, by Donald Knuth and Michael Plass, from 1981. It is the source for what this page describes.</dd></div>
-      <div><dt>Hyphenation by pattern</dt><dd>TeX decides where words may be hyphenated using a compact set of patterns, from Frank Liang&rsquo;s thesis.</dd></div>
-      <div><dt>Browser support</dt><dd>I recall that some browsers have a CSS setting, <code>text-wrap: pretty</code>, that tries to avoid ugly line endings, and that its details differ between browsers. I have not checked which do what.</dd></div>
+      <div><dt>Hyphenation by pattern</dt><dd>TeX decides where words may be hyphenated using a compact set of patterns, from Frank Liang&rsquo;s 1983 thesis.</dd></div>
+      <div><dt>Browser support</dt><dd>The CSS property <code>text-wrap: pretty</code> asks the browser to avoid ugly line endings, such as a very short last line. Support differs between browsers, so check a current compatibility table before relying on it.</dd></div>
       <div><dt>Shortest paths</dt><dd>Seen as a graph of break points, the problem is a shortest path. <a href="../one-loop-many-searches/">One loop, many searches</a> covers the search side of that.</dd></div>
       <div><dt>Viterbi decoding</dt><dd>The same idea, remembering the best way to reach each state, used for finding the most likely sequence of hidden states.</dd></div>
     </dl>

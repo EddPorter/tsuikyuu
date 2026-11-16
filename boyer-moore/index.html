@@ -203,14 +203,14 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
 
   <section aria-labelledby="h-next">
     <h2 id="h-next">Where to go next</h2>
-    <p>Names to search for. They are pointers, not explanations, and the remarks about particular tools are from memory.</p>
+    <p>Names to search for. They are pointers, not explanations.</p>
     <dl class="lines">
-      <div><dt>Full Boyer&ndash;Moore</dt><dd>Adds a &ldquo;good suffix&rdquo; rule. If the last few letters matched before a mismatch, slide to the next place in the pattern where that ending also occurs. The slide is the larger of what the two rules give. I recall that with further refinements it guarantees time in proportion to the text length, but check the details.</dd></div>
+      <div><dt>Full Boyer&ndash;Moore</dt><dd>Adds a &ldquo;good suffix&rdquo; rule. If the last few letters matched before a mismatch, slide to the next place in the pattern where that ending also occurs. The slide is the larger of what the two rules give. With a further refinement due to Galil, the worst case is time in proportion to the length of the text.</dd></div>
       <div><dt>Knuth&ndash;Morris&ndash;Pratt</dt><dd>Reads the text strictly left to right and never steps back, by precomputing what a partial match tells you. Its guarantee holds on every input.</dd></div>
       <div><dt>Rabin&ndash;Karp</dt><dd>Compares a hash of each window of text with a hash of the pattern, updated cheaply as the window slides. It extends well to searching for many patterns at once. The idea of hashing small windows also appears in <a href="../fuzzy-hashing/">Nearly the same</a>.</dd></div>
       <div><dt>Aho&ndash;Corasick</dt><dd>Searches for a whole dictionary of patterns in one pass, using a trie with extra links. See <a href="../tries/">Shared beginnings</a> for the trie part.</dd></div>
       <div><dt>Indexes</dt><dd>If you will search the same text many times, build an index once (a suffix array, say) instead of scanning each time, as on <a href="../shortest-unique-identifiers/">Just enough letters</a>.</dd></div>
-      <div><dt>Real tools</dt><dd>I recall that grep and similar tools use ideas from this family, together with fast routines that scan for a single byte, but I have not verified which tool does what.</dd></div>
+      <div><dt>GNU grep</dt><dd>Its original author, Mike Haertel, described its speed as coming from a Boyer&ndash;Moore search that looks first for the last byte of the pattern and skips ahead using a table, in a 2010 mailing-list post called &ldquo;why GNU grep is fast&rdquo;.</dd></div>
     </dl>
   </section>
 

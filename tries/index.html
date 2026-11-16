@@ -255,7 +255,7 @@ details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 
       <div class="treebox" id="m-tree"></div>
       <p class="status" id="m-status" role="status" aria-live="polite"></p>
     </div>
-    <p>This structure is usually called a <strong>DAWG</strong>, a directed acyclic word graph, or a minimal acyclic finite-state automaton. I recall that it is used to store large word lists compactly, for example in word-game programs, but I have not verified that. It gives up some things to get there. A node no longer belongs to one word, so it cannot carry data for a single word, such as a count. And adding a new word to a merged graph is harder than adding one to a trie, because a merged piece that other words share may have to be split apart first. For that reason it is usually built once from a finished list.</p>
+    <p>This structure is usually called a <strong>DAWG</strong>, a directed acyclic word graph, or a minimal acyclic finite-state automaton. It is used to store large word lists compactly: Appel and Jacobson&rsquo;s 1988 article on a very fast Scrabble program used one for its word list. It gives up some things to get there. A node no longer belongs to one word, so it cannot carry data for a single word, such as a count. And adding a new word to a merged graph is harder than adding one to a trie, because a merged piece that other words share may have to be split apart first. For that reason it is usually built once from a finished list.</p>
     <details>
       <summary>The code that merges (also what this page runs)</summary>
       <div class="stack" id="merge-code"></div>
