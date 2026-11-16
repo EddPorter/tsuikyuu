@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>One Loop, Many Searches</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: a reading column that opens into a two-pane workbench (map left, live code right), then a row of finished runs. */
+:root {
+  --bg: #eceff2;
+  --surface: #fbfcfd;
+  --cell: #f0f3f5;
+  --ink: #16212b;
+  --muted: #55646f;
+  --line: #cdd5dc;
+  --accent: #2b2bd6;
+  --accent-soft: #e3e3fb;
+  --wall: #2a3742;
+  --mud: #d2b98a;
+  --exp-a: #c4e8e4;
+  --exp-b: #2f9c95;
+  --frontier: #f2b01e;
+  --start: #1d8a4a;
+  --goal: #cc2b3e;
+  --code-bg: #15222c;
+  --code-ink: #d8e2ea;
+  --code-cm: #7f93a3;
+  --code-kw: #8ec5ff;
+  --slot-bg: #1f3040;
+  --hot-bg: #2b2f6b;
+  --hot-bar: #9aa0ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
+    --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --wall: #62768a; --mud: #6e5a35;
+    --exp-a: #1f5551; --exp-b: #54c4bb; --frontier: #f5b83d; --start: #4cc77b; --goal: #ff6b7d;
+    --code-bg: #0b1117; --slot-bg: #17232d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1;
+  --line: #2a3744; --accent: #9aa2ff; --accent-soft: #23265a; --wall: #62768a; --mud: #6e5a35;
+  --exp-a: #1f5551; --exp-b: #54c4bb; --frontier: #f5b83d; --start: #4cc77b; --goal: #ff6b7d;
+  --code-bg: #0b1117; --slot-bg: #17232d;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 64px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 500; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.muted { color: var(--muted); }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* the loop */
+.loop { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+pre.code {
+  margin: 0; background: var(--code-bg); color: var(--code-ink);
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
+  padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2;
+}
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; border-left: 3px solid transparent; }
+pre.code .slot { background: var(--slot-bg); }
+pre.code .hot { background: var(--hot-bg); border-left-color: var(--hot-bar); color: #fff; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.legend { display: grid; gap: 14px; margin: 0; }
+.legend div { display: grid; gap: 2px; }
+.legend dt { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+.legend dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.legend .hotname { color: var(--accent); }
+.note { color: var(--muted); font-size: 0.95rem; }
+
+/* workbench */
+.bench { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.stage { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.canvaswrap { width: 100%; }
+canvas { display: block; max-width: 100%; border-radius: 4px; touch-action: none; cursor: crosshair; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field > .lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+
+.seg { display: inline-flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
+.seg label:last-of-type { border-right: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--surface); font-weight: 600; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+.btn {
+  font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+input[type="range"] { accent-color: var(--accent); width: 130px; }
+
+.readout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+.status { min-height: 1.6em; font-weight: 500; }
+.status.ok { color: var(--start); }
+.status.bad { color: var(--goal); }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.swatches span { display: inline-flex; align-items: center; gap: 6px; }
+.swatches i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 11.5px; }
+.chip { padding: 2px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--cell); font-variant-numeric: tabular-nums; }
+.chip.next { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); font-weight: 500; }
+.chips .gap { color: var(--muted); padding: 2px 2px; }
+
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.blurb { font-size: 0.98rem; }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; align-items: baseline; }
+.fn header .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+.fn header .tag { font-size: 12px; color: var(--muted); }
+.fn.changes header .tag { color: var(--accent); font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .fn, details > pre { margin: 0 12px 12px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+
+ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+
+/* comparison */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tile header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tile .stats { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.tile .stats b { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.tile .verdict { font-size: 12.5px; font-weight: 600; }
+.tile .verdict.good { color: var(--start); }
+.tile .verdict.bad { color: var(--goal); }
+.tile .btn { align-self: flex-start; }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 15px; }
+th, td { text-align: left; padding: 10px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+
+footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
+
+@media (max-width: 920px) {
+  .loop, .bench { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 520px) {
+  .readout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+html, body { margin: 0; }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <h1>One loop, many searches</h1>
+    <p class="lead">Breadth-first, depth-first, Dijkstra and A* are usually taught as separate algorithms. They are one short loop with a single decision swapped out. Here you can swap it yourself and watch the search change.</p>
+  </header>
+
+  <section aria-labelledby="h-loop">
+    <h2 id="h-loop">The loop</h2>
+    <p>Every search keeps a <em>frontier</em> of places it could go next and a record of places it has already visited. Each turn it asks one question: which frontier entry should I take out now? The highlighted line is where that question is answered, and it is the only place the famous algorithms differ.</p>
+    <div class="loop">
+      <pre class="code" id="loop-code" aria-label="The search loop"></pre>
+      <dl class="legend">
+        <div><dt class="hotname">p.removeChoice</dt><dd>Chooses which frontier entry to expand next, and returns it with the entries left over. This is the strategy.</dd></div>
+        <div><dt>p.isGoal</dt><dd>Says whether a state is the one we want.</dd></div>
+        <div><dt>p.nextActions</dt><dd>Lists the moves available from a state.</dd></div>
+        <div><dt>p.applyAction</dt><dd>Returns the state a move leads to. It must build a fresh state and never change the old one.</dd></div>
+        <div><dt>p.stepCost</dt><dd>Prices a single move.</dd></div>
+        <div><dt>p.heuristic</dt><dd>Guesses the remaining cost to the goal, for the strategies that use a guess.</dd></div>
+      </dl>
+    </div>
+    <p class="note">The page runs the code you see here, not a lookalike. Two points are easy to miss. <code>id(state)</code> turns a state into a number, because two states with equal contents are different objects and <code>===</code> would never match them. And when a second route reaches a state already waiting in the frontier, only the cheaper route is kept.</p>
+  </section>
+
+  <section aria-labelledby="h-try">
+    <h2 id="h-try">Try it</h2>
+    <p>Choose a strategy and press Play. Only the highlighted function in the right-hand panel changes. Drag the green and red markers, or paint walls and mud onto the map.</p>
+
+    <div class="bench">
+      <div class="stage">
+        <div class="panel">
+          <div class="field">
+            <span class="lab" id="lab-strat">Strategy (removeChoice)</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lab-strat" id="seg-strat"></div>
+          </div>
+          <div class="canvaswrap" id="mainwrap"><canvas id="main" aria-label="Search map. Drag to paint walls or move the markers."></canvas></div>
+          <div class="swatches" aria-hidden="true">
+            <span><i style="background:var(--frontier)"></i>Frontier</span>
+            <span><i style="background:var(--exp-b)"></i>Visited</span>
+            <span><i style="background:var(--mud)"></i>Mud</span>
+            <span><i style="background:var(--wall)"></i>Wall</span>
+            <span><i style="background:var(--accent)"></i>Route found</span>
+          </div>
+          <div class="readout">
+            <div><span class="k">Expanded</span><span class="v" id="r-exp">0</span></div>
+            <div><span class="k">In frontier</span><span class="v" id="r-fro">1</span></div>
+            <div><span class="k">Route cost</span><span class="v" id="r-cost">–</span></div>
+            <div><span class="k">Route steps</span><span class="v" id="r-steps">–</span></div>
+          </div>
+          <div class="status" id="status" role="status" aria-live="polite"></div>
+          <div class="row">
+            <button class="btn" id="b-step" type="button">Step</button>
+            <button class="btn primary" id="b-play" type="button">Play</button>
+            <button class="btn" id="b-finish" type="button">Finish</button>
+            <button class="btn" id="b-restart" type="button">Restart</button>
+            <label class="field" for="speed"><span class="lab">Speed</span><input type="range" id="speed" min="0" max="6" value="3"></label>
+          </div>
+          <div class="field">
+            <span class="lab">Frontier, in list order (next out is outlined)</span>
+            <div class="chips" id="chips" aria-live="off"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="row">
+            <div class="field">
+              <span class="lab" id="lab-moves">Moves (nextActions)</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lab-moves">
+                <input type="radio" name="moves" id="m4" value="4" checked><label for="m4">4 directions</label>
+                <input type="radio" name="moves" id="m8" value="8"><label for="m8">8 directions</label>
+              </div>
+            </div>
+            <label class="field" for="mud"><span class="lab">Mud cost (stepCost): <span id="mud-val">5</span></span><input type="range" id="mud" min="1" max="9" value="5"></label>
+          </div>
+          <div class="row">
+            <div class="field">
+              <span class="lab" id="lab-brush">Brush</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lab-brush">
+                <input type="radio" name="brush" id="bw" value="wall" checked><label for="bw">Wall</label>
+                <input type="radio" name="brush" id="bm" value="mud"><label for="bm">Mud</label>
+                <input type="radio" name="brush" id="be" value="erase"><label for="be">Erase</label>
+              </div>
+            </div>
+            <div class="field">
+              <span class="lab">Map</span>
+              <div class="row" style="gap:8px">
+                <button class="btn small" type="button" id="p-demo">Mud and pocket</button>
+                <button class="btn small" type="button" id="p-open">Open field</button>
+                <button class="btn small" type="button" id="p-rand">Random walls</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="panel">
+          <h3 id="strat-name"></h3>
+          <p class="blurb" id="strat-blurb"></p>
+        </div>
+        <div id="fn-panel" style="display:flex;flex-direction:column;gap:16px"></div>
+        <details>
+          <summary>The parts that never change</summary>
+          <div class="stack" id="static-panel"></div>
+        </details>
+      </div>
+    </div>
+
+    <h3>Things to try</h3>
+    <ul class="try">
+      <li>Run Breadth-first, then Cheapest-first. Which one walks straight through the mud, and which one goes round?</li>
+      <li>Run Greedy on the default map. Watch it march into the pocket in front of the goal and fill it before it escapes.</li>
+      <li>Drag the mud cost down to 1. Breadth-first and Cheapest-first now agree, because every step costs the same.</li>
+      <li>Switch to 8 directions and look at <code>nextActions</code> and <code>heuristic</code> in the panel. The strategies stay as they were, but the map around them changed.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-cmp">
+    <h2 id="h-cmp">Same map, five strategies</h2>
+    <p>Each tile is a complete run on the map above, using your current walls, mud and move rules. Visited cells are shaded from the first expanded (pale) to the last (strong). Compare how many cells each strategy had to touch with how good its route is.</p>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section aria-labelledby="h-tab">
+    <h2 id="h-tab">What each swap does</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Strategy</th><th>Takes next</th><th>The frontier acts like</th><th>Guarantee</th></tr></thead>
+        <tbody>
+          <tr><td>Breadth-first</td><td>The oldest entry</td><td>A queue</td><td>The route with the fewest steps. Costs are ignored.</td></tr>
+          <tr><td>Depth-first</td><td>The newest entry</td><td>A stack</td><td>None. It finds a route if one exists, but not a good one.</td></tr>
+          <tr><td>Cheapest-first</td><td>Lowest cost so far</td><td>A priority queue on cost</td><td>The cheapest route (Dijkstra's algorithm).</td></tr>
+          <tr><td>Greedy</td><td>Lowest estimate to goal</td><td>A priority queue on the estimate</td><td>None. Fast on friendly maps and easily trapped.</td></tr>
+          <tr><td>A*</td><td>Lowest cost so far plus estimate</td><td>A priority queue on both</td><td>The cheapest route, provided the estimate never overshoots.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The same idea carries well beyond maps. Sliding puzzles, route planners and action planners all supply their own <code>isGoal</code>, <code>nextActions</code>, <code>applyAction</code> and <code>stepCost</code>, then borrow a strategy from the table. The loop in the first section is the graph-search outline from Russell and Norvig, <em>Artificial Intelligence: A Modern Approach</em>.</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  /* ---------- the map ---------- */
+  const COLS = 24, ROWS = 15;
+  const FREE = 0, WALL = 1, MUDCELL = 2;
+  let grid = new Array(COLS * ROWS).fill(FREE);
+  let start = { x: 2, y: 7 }, goal = { x: 20, y: 7 };
+  let diagonals = false;
+  let MUD = 5;
+
+  const MOVES4 = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+  const MOVES8 = [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [-1, 0], [0, 1], [1, 0]];
+
+  const open = (x, y) => {
+    return x >= 0 && y >= 0 && x < COLS && y < ROWS && grid[y * COLS + x] !== WALL;
+  };
+  const isMud = (x, y) => {
+    return grid[y * COLS + x] === MUDCELL;
+  };
+  const id = (s) => {
+    return s.y * COLS + s.x;
+  };
+  const minBy = (list, f) => {
+    return list.reduce((a, b) => (f(b) < f(a) ? b : a));
+  };
+
+  /* ---------- the loop (displayed and run as written) ---------- */
+  function* search(start, p) {
+    let frontier = [{ state: start, parent: null, cost: 0, estimate: p.heuristic(start) }];
+    const explored = new Set();
+
+    while (frontier.length > 0) {
+      let node;
+      [node, frontier] = p.removeChoice(frontier);
+      explored.add(id(node.state));
+      if (p.isGoal(node.state)) return node;
+
+      for (const action of p.nextActions(node.state)) {
+        const state = p.applyAction(node.state, action);
+        if (explored.has(id(state))) continue;
+
+        const cost = node.cost + p.stepCost(node.state, action);
+        const queued = frontier.find((n) => id(n.state) === id(state));
+        if (queued && queued.cost <= cost) continue;
+
+        const child = { state, parent: node, cost, estimate: p.heuristic(state) };
+        frontier = frontier.filter((n) => n !== queued).concat(child);
+      }
+      yield { node, frontier, explored }; // pause so the page can draw a frame
+    }
+    return null;
+  }
+
+  /* ---------- the pluggable functions ---------- */
+  const isGoal = (s) => {
+    return s.x === goal.x && s.y === goal.y;
+  };
+  const applyAction = (s, [dx, dy]) => {
+    // a fresh object each time, never a change to s
+    return { x: s.x + dx, y: s.y + dy };
+  };
+  const stepCost = (s, [dx, dy]) => {
+    const terrain = isMud(s.x + dx, s.y + dy) ? MUD : 1;
+    return terrain * (dx && dy ? Math.SQRT2 : 1);
+  };
+  const nextActions4 = (s) => {
+    return MOVES4.filter(([dx, dy]) => open(s.x + dx, s.y + dy));
+  };
+  const nextActions8 = (s) => {
+    // no cutting corners: both neighbours beside a diagonal must be open
+    return MOVES8.filter(([dx, dy]) =>
+      open(s.x + dx, s.y + dy) && open(s.x + dx, s.y) && open(s.x, s.y + dy));
+  };
+  const heuristic4 = (s) => {
+    // Manhattan distance to the goal
+    return Math.abs(s.x - goal.x) + Math.abs(s.y - goal.y);
+  };
+  const heuristic8 = (s) => {
+    // diagonal distance to the goal
+    const dx = Math.abs(s.x - goal.x), dy = Math.abs(s.y - goal.y);
+    return Math.max(dx, dy) + (Math.SQRT2 - 1) * Math.min(dx, dy);
+  };
+
+  const STRATEGIES = [
+    {
+      key: 'bfs', name: 'Breadth-first',
+      blurb: 'Takes the entry that has waited longest, so the frontier is a queue. The search spreads outward in rings, one step further each time. It finds a route with the fewest steps but takes no notice of mud.',
+      uses: 'Ignores cost and estimate.',
+      removeChoice: (frontier) => {
+        // oldest first: the frontier is a queue
+        return [frontier[0], frontier.slice(1)];
+      },
+      chip: () => ''
+    },
+    {
+      key: 'dfs', name: 'Depth-first',
+      blurb: 'Takes the newest entry, so the frontier is a stack. The search commits to one direction and backs up only when it is stuck. It needs little memory, but the route it returns can be long and wasteful.',
+      uses: 'Ignores cost and estimate.',
+      removeChoice: (frontier) => {
+        // newest first: the frontier is a stack
+        const last = frontier.length - 1;
+        return [frontier[last], frontier.slice(0, last)];
+      },
+      chip: () => ''
+    },
+    {
+      key: 'ucs', name: 'Cheapest-first',
+      blurb: 'Takes the entry with the lowest cost so far. The search spreads in rings of equal cost instead of equal steps, so it goes round the mud when that is cheaper. This is Dijkstra’s algorithm.',
+      uses: 'Reads cost.',
+      removeChoice: (frontier) => {
+        // lowest cost so far first
+        const best = minBy(frontier, (n) => n.cost);
+        return [best, frontier.filter((n) => n !== best)];
+      },
+      chip: (n) => fmt(n.cost)
+    },
+    {
+      key: 'greedy', name: 'Greedy',
+      blurb: 'Takes the entry whose estimated distance to the goal is smallest and ignores the cost so far. It heads straight for the goal and is often quick, but a dead end pulls it in and the route it returns can be poor.',
+      uses: 'Reads estimate.',
+      removeChoice: (frontier) => {
+        // closest to the goal (by estimate) first
+        const best = minBy(frontier, (n) => n.estimate);
+        return [best, frontier.filter((n) => n !== best)];
+      },
+      chip: (n) => fmt(n.estimate)
+    },
+    {
+      key: 'astar', name: 'A*',
+      blurb: 'Takes the entry with the lowest cost so far plus estimated distance to go. That is cheapest-first with a sense of direction. The estimate never exceeds the true cost, so the route is still the cheapest.',
+      uses: 'Reads cost and estimate.',
+      removeChoice: (frontier) => {
+        // lowest (cost so far + estimate to go) first
+        const best = minBy(frontier, (n) => n.cost + n.estimate);
+        return [best, frontier.filter((n) => n !== best)];
+      },
+      chip: (n) => fmt(n.cost + n.estimate)
+    }
+  ];
+  let strat = STRATEGIES[0];
+
+  const params = (s) => ({
+    removeChoice: s.removeChoice,
+    isGoal,
+    nextActions: diagonals ? nextActions8 : nextActions4,
+    applyAction,
+    stepCost,
+    heuristic: diagonals ? heuristic8 : heuristic4
+  });
+
+  /* ---------- helpers ---------- */
+  function fmt(n) { return String(+n.toFixed(1)); }
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1);
+    const indent = Math.min(...rest.filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length));
+    return [lines[0], ...rest.map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|continue|while|yield)\b/g;
+  function highlightLines(src) {
+    return src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line;
+      const cm = i >= 0 ? line.slice(i) : '';
+      return { raw: line, html: esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '') };
+    });
+  }
+  function codeBlock(src, hotTest) {
+    const pre = document.createElement('pre');
+    pre.className = 'code';
+    pre.innerHTML = highlightLines(src).map((l) => {
+      const cls = hotTest && hotTest.hot.test(l.raw) ? 'ln hot' : (hotTest && hotTest.slot.test(l.raw) ? 'ln slot' : 'ln');
+      return '<span class="' + cls + '">' + (l.html || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  const $ = (s) => document.getElementById(s);
+
+  /* ---------- colours ---------- */
+  let C = {};
+  function readColours() {
+    const cs = getComputedStyle(document.documentElement);
+    ['surface', 'cell', 'ink', 'muted', 'line', 'accent', 'wall', 'mud', 'exp-a', 'exp-b', 'frontier', 'start', 'goal']
+      .forEach((k) => { C[k] = cs.getPropertyValue('--' + k).trim(); });
+  }
+  function hex(h) { return [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); }
+  function mix(a, b, t) {
+    const x = hex(a), y = hex(b);
+    return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')';
+  }
+
+  /* ---------- drawing ---------- */
+  function sizeCanvas(canvas, width) {
+    const cell = Math.max(6, Math.floor(width / COLS));
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = cell * COLS + 'px';
+    canvas.style.height = cell * ROWS + 'px';
+    canvas.width = cell * COLS * dpr;
+    canvas.height = cell * ROWS * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, cell };
+  }
+  function paint(canvas, wrapWidth, o) {
+    const { ctx, cell } = sizeCanvas(canvas, wrapWidth);
+    const rank = new Int32Array(COLS * ROWS).fill(-1);
+    o.order.forEach((cid, i) => { rank[cid] = i; });
+    const maxRank = Math.max(1, o.order.length - 1);
+    const frontierIds = new Set(o.frontier || []);
+    const gap = cell >= 14 ? 1 : 0.5;
+
+    ctx.fillStyle = C.surface;
+    ctx.fillRect(0, 0, cell * COLS, cell * ROWS);
+
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const i = y * COLS + x;
+        let fill;
+        if (grid[i] === WALL) fill = C.wall;
+        else {
+          const mud = grid[i] === MUDCELL;
+          fill = mud ? C.mud : C.cell;
+          if (rank[i] >= 0) fill = mix(C['exp-a'], C['exp-b'], rank[i] / maxRank);
+          if (rank[i] >= 0 && mud) fill = mix(C.mud, C['exp-b'], 0.55 * (0.4 + 0.6 * rank[i] / maxRank));
+          if (frontierIds.has(i)) fill = mud ? mix(C.mud, C.frontier, 0.7) : C.frontier;
+        }
+        ctx.fillStyle = fill;
+        ctx.fillRect(x * cell + gap, y * cell + gap, cell - gap * 2, cell - gap * 2);
+        if (grid[i] === MUDCELL && cell >= 14) {
+          ctx.fillStyle = C.wall;
+          ctx.globalAlpha = 0.35;
+          const r = Math.max(1, cell * 0.07);
+          [[0.3, 0.35], [0.65, 0.3], [0.45, 0.68], [0.75, 0.72]].forEach(([px, py]) => {
+            ctx.beginPath(); ctx.arc(x * cell + px * cell, y * cell + py * cell, r, 0, 6.2832); ctx.fill();
+          });
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+
+    const mid = (s) => [s.x * cell + cell / 2, s.y * cell + cell / 2];
+    if (o.path && o.path.length > 1) {
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      [[C.surface, 0.46], [C.accent, 0.26]].forEach(([colour, w]) => {
+        ctx.strokeStyle = colour; ctx.lineWidth = Math.max(2, cell * w);
+        ctx.beginPath();
+        o.path.forEach((s, i) => { const [px, py] = mid(s); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+        ctx.stroke();
+      });
+    }
+    if (o.current != null) {
+      const cx = o.current % COLS, cy = Math.floor(o.current / COLS);
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+      ctx.strokeRect(cx * cell + 2, cy * cell + 2, cell - 4, cell - 4);
+    }
+    [[start, C.start, 'S'], [goal, C.goal, 'G']].forEach(([s, colour, letter]) => {
+      const [px, py] = mid(s);
+      ctx.fillStyle = colour;
+      ctx.beginPath(); ctx.arc(px, py, cell * 0.38, 0, 6.2832); ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = C.surface; ctx.stroke();
+      if (o.letters && cell >= 14) {
+        ctx.fillStyle = '#fff';
+        ctx.font = '600 ' + Math.round(cell * 0.46) + 'px "IBM Plex Sans", sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(letter, px, py + 0.5);
+      }
+    });
+    return cell;
+  }
+
+  /* ---------- live search state ---------- */
+  let gen, order, frontierNodes, currentNode, result, expandedCount;
+  function pathOf(node) {
+    const out = [];
+    for (let n = node; n; n = n.parent) out.push(n.state);
+    return out.reverse();
+  }
+  function resetSearch() {
+    gen = search(start, params(strat));
+    order = [];
+    currentNode = null;
+    result = undefined;
+    frontierNodes = [{ state: start, parent: null, cost: 0, estimate: params(strat).heuristic(start) }];
+    acc = 0;
+  }
+  function step() {
+    if (result !== undefined) return;
+    const r = gen.next();
+    if (r.done) {
+      result = r.value;
+      if (result) { order.push(id(result.state)); currentNode = result; }
+      return;
+    }
+    const v = r.value;
+    order.push(id(v.node.state));
+    currentNode = v.node;
+    frontierNodes = v.frontier;
+    if (v.frontier.length === 0) result = null;
+  }
+
+  /* ---------- main view ---------- */
+  let mainCell = 20;
+  const mainCanvas = $('main');
+  function drawMain() {
+    const w = $('mainwrap').clientWidth;
+    mainCell = paint(mainCanvas, w, {
+      order,
+      frontier: result === undefined ? frontierNodes.map((n) => id(n.state)) : [],
+      current: currentNode ? id(currentNode.state) : null,
+      path: result ? pathOf(result) : null,
+      letters: true
+    });
+    renderReadout();
+    renderChips();
+  }
+  function renderReadout() {
+    $('r-exp').textContent = order.length;
+    $('r-fro').textContent = result === undefined ? frontierNodes.length : (result ? frontierNodes.length : 0);
+    const st = $('status');
+    if (result) {
+      $('r-cost').textContent = fmt(result.cost);
+      $('r-steps').textContent = pathOf(result).length - 1;
+      st.className = 'status ok';
+      st.textContent = 'Reached the goal after expanding ' + order.length + ' cells.';
+    } else if (result === null) {
+      $('r-cost').textContent = '–'; $('r-steps').textContent = '–';
+      st.className = 'status bad';
+      st.textContent = 'No route. The frontier ran out before the goal was reached.';
+    } else {
+      $('r-cost').textContent = '–'; $('r-steps').textContent = '–';
+      st.className = 'status';
+      st.textContent = order.length ? 'Searching…' : 'Ready. Press Step or Play.';
+    }
+  }
+  function renderChips() {
+    const box = $('chips');
+    box.textContent = '';
+    if (result !== undefined) { box.textContent = result ? 'The search has finished.' : 'The frontier is empty.'; return; }
+    const list = frontierNodes;
+    const pick = strat.removeChoice(list)[0];
+    const pickIndex = list.indexOf(pick);
+    const keep = new Set([pickIndex]);
+    for (let i = 0; i < Math.min(7, list.length); i++) keep.add(i);
+    for (let i = Math.max(0, list.length - 8); i < list.length; i++) keep.add(i);
+    const idx = [...keep].sort((a, b) => a - b);
+    let prev = -1;
+    idx.forEach((i) => {
+      if (i - prev > 1) { const g = document.createElement('span'); g.className = 'gap'; g.textContent = '…' + (i - prev - 1) + ' more…'; box.appendChild(g); }
+      const n = list[i];
+      const c = document.createElement('span');
+      c.className = 'chip' + (i === pickIndex ? ' next' : '');
+      const v = strat.chip(n);
+      c.textContent = n.state.x + ',' + n.state.y + (v ? ' · ' + v : '');
+      box.appendChild(c);
+      prev = i;
+    });
+  }
+
+  /* ---------- code panels ---------- */
+  function fnPanel(name, tag, src, changes) {
+    const d = document.createElement('div');
+    d.className = 'fn' + (changes ? ' changes' : '');
+    d.innerHTML = '<header><span class="name">' + name + '</span><span class="tag">' + esc(tag) + '</span></header>';
+    d.appendChild(codeBlock(src));
+    return d;
+  }
+  function renderPanels() {
+    const sub = (s) => dedent(s).replace(/\bMUD\b/g, String(MUD));
+    const p = params(strat);
+    const box = $('fn-panel');
+    box.textContent = '';
+    box.appendChild(fnPanel('removeChoice', 'changes with Strategy', 'removeChoice = ' + dedent(strat.removeChoice.toString()), true));
+    box.appendChild(fnPanel('nextActions', 'changes with Moves', 'nextActions = ' + dedent(p.nextActions.toString()), false));
+    box.appendChild(fnPanel('stepCost', 'changes with Mud cost', 'stepCost = ' + sub(stepCost.toString()), false));
+    box.appendChild(fnPanel('heuristic', 'used by Greedy and A*; follows Moves', 'heuristic = ' + dedent(p.heuristic.toString()), false));
+
+    const st = $('static-panel');
+    st.textContent = '';
+    [['isGoal', isGoal], ['applyAction', applyAction], ['open', open], ['isMud', isMud], ['id', id], ['minBy', minBy]].forEach(([n, f]) => {
+      st.appendChild(fnPanel(n, '', n + ' = ' + dedent(f.toString()), false));
+    });
+    $('strat-name').textContent = strat.name;
+    $('strat-blurb').textContent = strat.blurb + ' ' + strat.uses;
+  }
+
+  /* ---------- the loop listing ---------- */
+  $('loop-code').appendChild(document.createDocumentFragment());
+  (function () {
+    const pre = $('loop-code');
+    const block = codeBlock(dedent(search.toString()), { hot: /p\.removeChoice/, slot: /p\.(isGoal|nextActions|applyAction|stepCost|heuristic)/ });
+    pre.innerHTML = block.innerHTML;
+  })();
+
+  /* ---------- comparison tiles ---------- */
+  function runToEnd(s) {
+    const g = search(start, params(s));
+    const ord = [];
+    let res;
+    for (;;) {
+      const n = g.next();
+      if (n.done) { res = n.value; break; }
+      ord.push(id(n.value.node.state));
+      if (n.value.frontier.length === 0) { res = null; break; }
+    }
+    if (res) ord.push(id(res.state));
+    return { order: ord, result: res };
+  }
+  let minisQueued = false;
+  function scheduleMinis() {
+    if (minisQueued) return;
+    minisQueued = true;
+    requestAnimationFrame(() => { minisQueued = false; renderMinis(); });
+  }
+  const tilesBox = $('tiles');
+  function buildTiles() {
+    STRATEGIES.forEach((s) => {
+      const t = document.createElement('div');
+      t.className = 'tile';
+      t.innerHTML = '<header><h3>' + esc(s.name) + '</h3></header><canvas aria-label="Finished run of ' + esc(s.name) + '"></canvas>' +
+        '<div class="stats"></div><button type="button" class="btn small">Replay above</button>';
+      t.querySelector('button').addEventListener('click', () => {
+        document.getElementById('sg-' + s.key).checked = true;
+        chooseStrategy(s);
+        $('main').scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+        setPlaying(true);
+      });
+      s.tile = t;
+      tilesBox.appendChild(t);
+    });
+  }
+  function renderMinis() {
+    const runs = STRATEGIES.map((s) => ({ s, r: runToEnd(s) }));
+    const costs = runs.filter((x) => x.r.result).map((x) => x.r.result.cost);
+    const best = costs.length ? Math.min(...costs) : null;
+    runs.forEach(({ s, r }) => {
+      const canvas = s.tile.querySelector('canvas');
+      const width = s.tile.clientWidth - 24;
+      paint(canvas, width, { order: r.order, frontier: [], current: null, path: r.result ? pathOf(r.result) : null, letters: false });
+      const stats = s.tile.querySelector('.stats');
+      let html = 'Expanded <b>' + r.order.length + '</b>';
+      if (r.result) {
+        const extra = r.result.cost - best;
+        html += '<span>Route cost <b>' + fmt(r.result.cost) + '</b></span>' +
+          (extra < 1e-6 ? '<span class="verdict good">Cheapest route</span>' : '<span class="verdict bad">' + fmt(extra) + ' dearer than the best</span>');
+      } else {
+        html += '<span class="verdict bad">No route</span>';
+      }
+      stats.innerHTML = html;
+    });
+  }
+
+  /* ---------- controls ---------- */
+  const seg = $('seg-strat');
+  STRATEGIES.forEach((s, i) => {
+    seg.insertAdjacentHTML('beforeend',
+      '<input type="radio" name="strategy" id="sg-' + s.key + '" value="' + s.key + '"' + (i === 0 ? ' checked' : '') + '><label for="sg-' + s.key + '">' + esc(s.name) + '</label>');
+  });
+  seg.addEventListener('change', (e) => {
+    chooseStrategy(STRATEGIES.find((s) => s.key === e.target.value));
+  });
+  function chooseStrategy(s) {
+    strat = s;
+    setPlaying(false);
+    resetSearch(); renderPanels(); drawMain();
+  }
+  document.querySelectorAll('input[name="moves"]').forEach((el) => el.addEventListener('change', () => {
+    diagonals = el.value === '8' && el.checked;
+    mapChanged(true);
+  }));
+  $('mud').addEventListener('input', (e) => {
+    MUD = +e.target.value; $('mud-val').textContent = MUD;
+    mapChanged(true);
+  });
+  let brush = 'wall';
+  document.querySelectorAll('input[name="brush"]').forEach((el) => el.addEventListener('change', () => { brush = el.value; }));
+
+  function mapChanged(panelsToo) {
+    setPlaying(false);
+    resetSearch();
+    if (panelsToo) renderPanels();
+    drawMain();
+    scheduleMinis();
+  }
+  function setMap(builder, s, g) {
+    grid = new Array(COLS * ROWS).fill(FREE);
+    builder();
+    start = s; goal = g;
+    mapChanged(false);
+  }
+  const rect = (x0, y0, x1, y1, v) => {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) grid[y * COLS + x] = v;
+  };
+  function demoMap() {
+    setMap(() => {
+      rect(6, 2, 9, 12, MUDCELL);
+      rect(14, 4, 17, 4, WALL); rect(14, 10, 17, 10, WALL); rect(17, 4, 17, 10, WALL);
+    }, { x: 2, y: 7 }, { x: 20, y: 7 });
+  }
+  $('p-demo').addEventListener('click', demoMap);
+  $('p-open').addEventListener('click', () => setMap(() => {}, { x: 3, y: 7 }, { x: 20, y: 7 }));
+  $('p-rand').addEventListener('click', () => {
+    const s = { x: 2, y: 7 }, g = { x: 21, y: 7 };
+    setMap(() => {
+      for (let i = 0; i < grid.length; i++) {
+        const r = Math.random();
+        grid[i] = r < 0.27 ? WALL : (r < 0.35 ? MUDCELL : FREE);
+      }
+      grid[s.y * COLS + s.x] = FREE; grid[g.y * COLS + g.x] = FREE;
+    }, s, g);
+  });
+
+  /* pointer painting and marker dragging */
+  let drag = null, lastCell = -1, paintValue = WALL;
+  function cellAt(e) {
+    const r = mainCanvas.getBoundingClientRect();
+    const x = Math.floor((e.clientX - r.left) / mainCell), y = Math.floor((e.clientY - r.top) / mainCell);
+    return x >= 0 && y >= 0 && x < COLS && y < ROWS ? { x, y } : null;
+  }
+  function applyDrag(c) {
+    const key = c.y * COLS + c.x;
+    if (key === lastCell) return;
+    lastCell = key;
+    if (drag === 'start' && !(c.x === goal.x && c.y === goal.y)) { start = c; grid[key] = FREE; }
+    else if (drag === 'goal' && !(c.x === start.x && c.y === start.y)) { goal = c; grid[key] = FREE; }
+    else if (drag === 'paint' && !(c.x === start.x && c.y === start.y) && !(c.x === goal.x && c.y === goal.y)) { grid[key] = paintValue; }
+    else return;
+    mapChanged(false);
+  }
+  mainCanvas.addEventListener('pointerdown', (e) => {
+    const c = cellAt(e);
+    if (!c) return;
+    e.preventDefault();
+    mainCanvas.setPointerCapture(e.pointerId);
+    lastCell = -1;
+    if (c.x === start.x && c.y === start.y) drag = 'start';
+    else if (c.x === goal.x && c.y === goal.y) drag = 'goal';
+    else { drag = 'paint'; paintValue = brush === 'erase' ? FREE : (brush === 'mud' ? MUDCELL : WALL); }
+    applyDrag(c);
+  });
+  mainCanvas.addEventListener('pointermove', (e) => { if (drag) { const c = cellAt(e); if (c) applyDrag(c); } });
+  ['pointerup', 'pointercancel'].forEach((n) => mainCanvas.addEventListener(n, () => { drag = null; }));
+
+  /* playback */
+  const SPEEDS = [2, 5, 12, 25, 50, 100, 250];
+  let playing = false, lastT = 0, acc = 0;
+  function setPlaying(on) {
+    playing = on && result === undefined;
+    $('b-play').textContent = playing ? 'Pause' : 'Play';
+    if (playing) { lastT = performance.now(); requestAnimationFrame(tick); }
+  }
+  function tick(t) {
+    if (!playing) return;
+    acc += Math.min(0.1, (t - lastT) / 1000) * SPEEDS[+$('speed').value];
+    lastT = t;
+    let n = Math.floor(acc);
+    acc -= n;
+    while (n-- > 0 && result === undefined) step();
+    drawMain();
+    if (result !== undefined) setPlaying(false); else requestAnimationFrame(tick);
+  }
+  $('b-step').addEventListener('click', () => { setPlaying(false); step(); drawMain(); });
+  $('b-play').addEventListener('click', () => {
+    if (result !== undefined) { resetSearch(); }
+    setPlaying(!playing);
+  });
+  $('b-finish').addEventListener('click', () => { setPlaying(false); let guard = 0; while (result === undefined && guard++ < 5000) step(); drawMain(); });
+  $('b-restart').addEventListener('click', () => { setPlaying(false); resetSearch(); drawMain(); });
+
+  /* ---------- start up ---------- */
+  readColours();
+  buildTiles();
+  strat = STRATEGIES[0];
+  demoMapSilent();
+  function demoMapSilent() {
+    rect(6, 2, 9, 12, MUDCELL);
+    rect(14, 4, 17, 4, WALL); rect(14, 10, 17, 10, WALL); rect(17, 4, 17, 10, WALL);
+    resetSearch();
+    for (let i = 0; i < 70; i++) step();
+    renderPanels();
+    drawMain();
+    renderMinis();
+  }
+
+  const redrawAll = () => { readColours(); drawMain(); renderMinis(); };
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redrawAll);
+  new MutationObserver(redrawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  let rz;
+  new ResizeObserver(() => { clearTimeout(rz); rz = setTimeout(() => { drawMain(); renderMinis(); }, 60); }).observe(document.body);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => drawMain());
+})();
+</script>
+</body>
+</html>
