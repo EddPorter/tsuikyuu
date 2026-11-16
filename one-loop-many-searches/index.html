@@ -196,7 +196,9 @@ html, body { margin: 0; }
   <section aria-labelledby="h-loop">
     <h2 id="h-loop">The loop</h2>
     <p>Every search keeps a <em>frontier</em> of places it could go next and a record of places it has already visited. Each turn it asks one question: which frontier entry should I take out now? The highlighted line is where that question is answered, and it is the only place the famous algorithms differ.</p>
-    <div class="loop">
+    <details>
+      <summary>The loop (the code this page runs)</summary>
+      <div class="loop" style="padding:0 12px 12px">
       <pre class="code" id="loop-code" aria-label="The search loop"></pre>
       <dl class="legend">
         <div><dt class="hotname">p.removeChoice</dt><dd>Chooses which frontier entry to expand next, and returns it with the entries left over. This is the strategy.</dd></div>
@@ -206,13 +208,14 @@ html, body { margin: 0; }
         <div><dt>p.stepCost</dt><dd>Prices a single move.</dd></div>
         <div><dt>p.heuristic</dt><dd>Guesses the remaining cost to the goal, for the strategies that use a guess.</dd></div>
       </dl>
-    </div>
+      </div>
+    </details>
     <p class="note">The page runs the code you see here, not a lookalike. Two points are easy to miss. <code>id(state)</code> turns a state into a number, because two states with equal contents are different objects and <code>===</code> would never match them. And when a second route reaches a state already waiting in the frontier, only the cheaper route is kept.</p>
   </section>
 
   <section aria-labelledby="h-try">
     <h2 id="h-try">Try it</h2>
-    <p>Choose a strategy and press Play. Only the highlighted function in the right-hand panel changes. Drag the green and red markers, or paint walls and mud onto the map.</p>
+    <p>Choose a strategy and press Play. Only one function changes between strategies. Open Only the highlighted function in the right-hand panel changes.ldquo;The code for this strategyOnly the highlighted function in the right-hand panel changes.rdquo; on the right to see it, with the line being run highlighted. Drag the green and red markers, or paint walls and mud onto the map.</p>
 
     <div class="bench">
       <div class="stage">
@@ -286,7 +289,10 @@ html, body { margin: 0; }
           <h3 id="strat-name"></h3>
           <p class="blurb" id="strat-blurb"></p>
         </div>
-        <div id="fn-panel" style="display:flex;flex-direction:column;gap:16px"></div>
+        <details>
+          <summary>The code for this strategy</summary>
+          <div class="stack" id="fn-panel" style="display:flex;flex-direction:column;gap:16px"></div>
+        </details>
         <details>
           <summary>The parts that never change</summary>
           <div class="stack" id="static-panel"></div>

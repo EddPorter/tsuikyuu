@@ -220,7 +220,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
       </div>
     </div>
     <p class="note">Smart case means a query typed in lower case ignores case, and a query containing a capital letter must match case exactly. Many finders work that way.</p>
-    <details open>
+    <details>
       <summary>The code (it is what this page runs)</summary>
       <div class="stack" id="code-score"></div>
     </details>
@@ -236,7 +236,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
       <p class="status" id="dp-status" role="status" aria-live="polite"></p>
     </div>
     <p>Each cell reuses answers already worked out for the row above. That is the whole idea of dynamic programming: solve small versions first, remember them, and build up. This page checks its answer by also trying every placement, as in the list above. They agree, but the grid needs far less work as things grow.</p>
-    <details open>
+    <details>
       <summary>The code (it is what this page runs)</summary>
       <div class="stack" id="code-dp"></div>
     </details>
