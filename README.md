@@ -11,6 +11,7 @@ Each explainer is a single standalone HTML file in [`explainers/`](explainers). 
 | Explainer | What it shows |
 | --- | --- |
 | [One loop, many searches](explainers/one-loop-many-searches.html) | Breadth-first, depth-first, cheapest-first (Dijkstra), greedy and A* are one search loop with a different `removeChoice` function. Paint walls and mud on a map and watch each strategy run. |
+| [Just enough letters](explainers/shortest-unique-identifiers.html) | The fewest letters that pick out one word from a list. Swap how a search matches (contains, starts with, letters in order), what you are looking for, and how matches are counted, then watch the answers and the work change. |
 
 More explainers will be added to the same folder, and listed in [`index.html`](index.html).
 
