@@ -323,10 +323,25 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     <h3>Things to try</h3>
     <ul class="try">
       <li>Pick <em>Starts with</em>. Identifiers now have to be prefixes, like short git hashes, and they get longer.</li>
-      <li>Pick <em>Letters in order</em>. Gaps are allowed, the way a fuzzy finder matches. Answers get shorter, and a word can lose its answer completely: with the <em>Bananas</em> preset, <code>banana</code> has none, because every ordered selection of its letters is also in <code>bandana</code>.</li>
+      <li>Pick <em>Letters in order</em>. Gaps are allowed, the way a fuzzy finder matches. Some answers get shorter (try <em>DNA</em>), most stay the same, and a word can lose its answer completely: with the <em>Bananas</em> preset, <code>banana</code> has none, because every ordered selection of its letters is also in <code>bandana</code>.</li>
       <li>Load <em>Nested</em>. Some words contain no piece that another word lacks, so they get no identifier at all.</li>
       <li>Set the goal to <em>Every word</em>. The loop now looks for the longest text all the words share. Load <em>DNA</em> to see a tie: two pieces are equally long, and each word keeps the first one it meets, so the answers differ.</li>
     </ul>
+  </section>
+
+  <section aria-labelledby="h-fuzzy">
+    <h2 id="h-fuzzy">Fuzzy finding: the same rules in your editor</h2>
+    <p>The <em>Letters in order</em> rule is how a fuzzy finder works. Type a few letters and every item that contains them in that order, with gaps allowed, is a match. The file pickers in code editors, and tools such as fzf, work this way. Try it on your words, and load <em>Files</em> or <em>Trees</em> for more to search. Switch to <em>Contains</em> to see how much stricter side-by-side letters are.</p>
+    <div class="panel">
+      <label class="field" for="fz"><span class="lab">Type letters</span><input type="text" id="fz" autocomplete="off" spellcheck="false" placeholder="for example: bnn"></label>
+      <div class="field"><span class="lab" id="lab-fzmode">How to match</span><div class="seg" role="radiogroup" aria-labelledby="lab-fzmode" id="seg-fz"></div></div>
+      <div class="words" id="fz-rows"></div>
+      <div class="status" id="fz-status" role="status" aria-live="polite"></div>
+    </div>
+    <p>This page is about how few letters you need. In a fuzzy finder that is how many letters you have to type before only one item is left. The table compares the shortest answers under the two rules, for your words.</p>
+    <div class="tablewrap" style="max-height:none"><table id="fz-table"></table></div>
+    <p class="note" id="fz-note"></p>
+    <p>A real fuzzy finder does more than filter. It also ranks the matches so the one you probably want comes first, rewarding runs of consecutive letters and matches at the start of a word. That is a topic of its own.</p>
   </section>
 
   <section aria-labelledby="h-sort">
@@ -1118,6 +1133,61 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
     $('blurb-goal').textContent = GOALS[goalKey].name + ': ' + GOALS[goalKey].blurb;
     $('blurb-counter').textContent = COUNTERS[counterKey].name + ': ' + COUNTERS[counterKey].blurb;
   }
+
+  /* ---------- section: fuzzy finding ---------- */
+  let fzMode = 'letters';
+  function drawFuzzyList() {
+    const input = $('fz'), rows = $('fz-rows'), status = $('fz-status');
+    const qy = input.value.toLowerCase().replace(/\s+/g, '');
+    const match = MATCHES[fzMode];
+    rows.textContent = '';
+    const items = G.words.map((w, j) => ({ w, j, at: qy ? match.find(qy, w) : null }));
+    const order = qy ? [...items.filter((x) => x.at), ...items.filter((x) => !x.at)] : items;
+    order.forEach(({ w, j, at }) => {
+      const row = el('div', 'wrow' + (qy && !at ? ' dim' : ''));
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', w + (at ? ': matches ' + qy : ''));
+      row.append(el('span', 'idx', String(j + 1)), makeTiles(w, at, 'hit'), el('span', 'chip' + (at ? ' yes' : ''), at ? 'match' : '\u2013'));
+      rows.appendChild(row);
+    });
+    const n = items.filter((x) => x.at).length;
+    if (!G.words.length) status.textContent = 'Type some words at the top of the page.';
+    else if (!qy) status.textContent = 'Type a few letters. Matches move to the top, with the letters that matched highlighted.';
+    else if (n === 0) status.textContent = 'Nothing matches \u201c' + qy + '\u201d.';
+    else if (n === 1) status.textContent = 'Only ' + items.find((x) => x.at).w + ' matches. ' + plural(qy.length, 'letter', 'letters') + ' were enough.';
+    else status.textContent = n + ' of ' + G.words.length + ' words match \u201c' + qy + '\u201d.';
+  }
+  let fzTimer = 0;
+  function drawFuzzyTable() {
+    clearTimeout(fzTimer);
+    fzTimer = setTimeout(() => {
+      const tbl = $('fz-table');
+      tbl.textContent = '';
+      if (!G.words.length) { $('fz-note').textContent = ''; return; }
+      const a = runToEnd(G.words, 'contains', 'unique', 'scan').answers, b = runToEnd(G.words, 'letters', 'unique', 'scan').answers;
+      tbl.innerHTML = '<thead><tr><th>Word</th><th>Contains</th><th>Letters in order</th></tr></thead>';
+      const body = el('tbody');
+      let shorter = 0, longer = 0, same = 0, lost = 0, gained = 0;
+      G.words.forEach((w, j) => {
+        const x = a[j], y = b[j];
+        if (!x && !y) same++; else if (!x) gained++; else if (!y) lost++; else if (y.length < x.length) shorter++; else if (y.length > x.length) longer++; else same++;
+        const tr = el('tr');
+        tr.append(el('td', 'mono', w), el('td', 'mono', x ? x + ' (' + x.length + ')' : 'none'), el('td', 'mono', y ? y + ' (' + y.length + ')' : 'none'));
+        body.appendChild(tr);
+      });
+      tbl.appendChild(body);
+      const parts = [];
+      if (shorter) parts.push(plural(shorter, 'word needs', 'words need') + ' fewer letters');
+      if (same) parts.push(plural(same, 'word needs', 'words need') + ' the same number');
+      if (longer) parts.push(plural(longer, 'word needs', 'words need') + ' more');
+      if (lost) parts.push(plural(lost, 'word loses', 'words lose') + ' its answer');
+      if (gained) parts.push(plural(gained, 'word gains', 'words gain') + ' an answer');
+      $('fz-note').textContent = 'With gaps allowed, ' + parts.join(', ') + '. Allowing gaps cuts both ways: there are more pieces to choose from, but more words match each one, which makes it harder to be the only match.';
+    }, 30);
+  }
+  $('fz').addEventListener('input', drawFuzzyList);
+  seg('seg-fz', 'fzmode', { letters: MATCHES.letters, contains: MATCHES.contains }, fzMode, (v) => { fzMode = v; drawFuzzyList(); });
+  onWords(drawFuzzyList); onWords(drawFuzzyTable);
 
   /* ---------- section: sort the endings ---------- */
   function suffixData(words) {
