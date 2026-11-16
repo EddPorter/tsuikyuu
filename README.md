@@ -1,6 +1,8 @@
 # tsuikyuu
 
-Small, interactive explainers for algorithms, plus the early experiment they grew out of.
+Small, interactive explainers for algorithms. The name is 追及, "pursuit".
+
+Published at <https://eddporter.com/tsuikyuu/>.
 
 ## Explainers
 
@@ -10,11 +12,15 @@ Each explainer is a single standalone HTML file in [`explainers/`](explainers). 
 | --- | --- |
 | [One loop, many searches](explainers/one-loop-many-searches.html) | Breadth-first, depth-first, cheapest-first (Dijkstra), greedy and A* are one search loop with a different `removeChoice` function. Paint walls and mud on a map and watch each strategy run. |
 
-More explainers will be added to the same folder.
+More explainers will be added to the same folder, and listed in [`index.html`](index.html).
 
-## The original search sketch
+## Layout
 
-`lib/search.coffee` and `test/search.coffee` hold an early (2012) CoffeeScript sketch of the same generic search loop, with `mocha` tests. It is kept for reference. It has known problems, such as comparing states by reference, so the explainer's loop is the better starting point.
+| Path | What it is |
+| --- | --- |
+| `index.html` | The landing page that lists the explainers |
+| `explainers/` | One HTML file per explainer |
+| `.nojekyll` | Stops GitHub Pages running Jekyll over the site |
 
 ## Licence
 
