@@ -220,7 +220,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
       </div>
     </div>
     <p class="note">Smart case means a query typed in lower case ignores case, and a query containing a capital letter must match case exactly. Many finders work that way.</p>
-    <details open>
+    <details>
       <summary>The code (it is what this page runs)</summary>
       <div class="stack" id="code-score"></div>
     </details>
@@ -236,7 +236,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
       <p class="status" id="dp-status" role="status" aria-live="polite"></p>
     </div>
     <p>Each cell reuses answers already worked out for the row above. That is the whole idea of dynamic programming: solve small versions first, remember them, and build up. This page checks its answer by also trying every placement, as in the list above. They agree, but the grid needs far less work as things grow.</p>
-    <details open>
+    <details>
       <summary>The code (it is what this page runs)</summary>
       <div class="stack" id="code-dp"></div>
     </details>
@@ -280,16 +280,16 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
         </tbody>
       </table>
     </div>
-    <p class="note">The page breaks ties by the shorter item and then by list order. Real finders offer extra syntax for exact matches, prefixes and exclusions. I recall that fzf does, but check its documentation, as I have not verified the details.</p>
+    <p class="note">The page breaks ties by the shorter item and then by list order. Real finders offer extra syntax for exact matches, prefixes and exclusions. In fzf, for example, <code>'term</code> asks for an exact match, <code>^term</code> for a prefix, <code>term$</code> for a suffix and <code>!term</code> excludes items containing it.</p>
   </section>
 
   <section aria-labelledby="h-next">
     <h2 id="h-next">Where to go next</h2>
     <p>Names to search for. They are pointers, not explanations.</p>
     <dl class="lines">
-      <div><dt>Smith&ndash;Waterman</dt><dd>The dynamic-programming method for aligning two sequences in biology, scoring matches and gaps. I recall that fzf&rsquo;s main algorithm is described as a modified version of it, but check that before relying on it.</dd></div>
-      <div><dt>Edit distance</dt><dd>The number of insertions, deletions and substitutions needed to turn one string into another, found with a grid very like this one. It forgives typos, where letters-in-order forgives gaps.</dd></div>
-      <div><dt>Trigram index</dt><dd>Splitting text into three-letter pieces and indexing them, so a search can skip most of a large list. It is used in some code search tools. This is from memory.</dd></div>
+      <div><dt>Smith&ndash;Waterman</dt><dd>The dynamic-programming method for aligning two sequences in biology, scoring matches and gaps. A comment in fzf&rsquo;s source describes its main matching function as a modified version of it, one that does not allow pattern letters to be skipped.</dd></div>
+      <div><dt>Edit distance</dt><dd>The number of insertions, deletions and substitutions needed to turn one string into another, found with a grid very like this one, built step by step on <a href="../what-changed/">What changed?</a>. It forgives typos, where letters-in-order forgives gaps.</dd></div>
+      <div><dt>Trigram index</dt><dd>Splitting text into three-letter pieces and indexing them, so a search can skip most of a large list. Russ Cox&rsquo;s article &ldquo;Regular Expression Matching with a Trigram Index&rdquo; describes how Google Code Search worked this way.</dd></div>
       <div><dt>Levenshtein automaton</dt><dd>A machine that recognises all words within a given edit distance of a query, used to search dictionaries quickly.</dd></div>
       <div><dt>Related pages</dt><dd>Autocomplete by prefix is <a href="../tries/">Shared beginnings</a>. Fuzzy in a different sense, spotting near-copies, is <a href="../fuzzy-hashing/">Nearly the same</a>. How few letters would single out an item is <a href="../shortest-unique-identifiers/">Just enough letters</a>.</dd></div>
     </dl>

@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Read It Backwards</title>
+<meta name="description" content="An interactive explainer of Boyer-Moore-Horspool string search: compare the pattern from its end, skip ahead on a mismatch, and see how much of the text is never looked at.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: one reading column that builds the idea in stages, each ending in a small workbench you can poke. */
+:root {
+  --bg: #eceff2; --surface: #fbfcfd; --cell: #f0f3f5; --ink: #16212b; --muted: #55646f; --line: #cdd5dc;
+  --accent: #2b2bd6; --accent-soft: #e3e3fb; --on-accent: #ffffff;
+  --good: #1d6f3d; --good-bg: #dff3e5; --bad: #b3261e; --bad-bg: #fbe3e1;
+  --code-bg: #15222c; --code-ink: #d8e2ea; --code-cm: #7f93a3; --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+    --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+    --good: #6fd78f; --good-bg: #17301f; --bad: #ff9a92; --bad-bg: #3a1b19; --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+  --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+  --good: #6fd78f; --good-bg: #17301f; --bad: #ff9a92; --bad-bg: #3a1b19; --code-bg: #0b1117;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.two { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+input[type="text"] { font: inherit; font-family: var(--font-mono); font-size: 15px; width: 100%; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+input[type="range"] { accent-color: var(--accent); width: 240px; max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
+.seg label:last-of-type { border-right: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.status { min-height: 3.2em; font-weight: 500; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* the text and the sliding pattern */
+.stage { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); padding: 10px 10px 14px; }
+.tr, .pr { display: flex; width: max-content; }
+.pr { margin-top: 6px; transition: margin-left 0.15s ease; }
+.c { width: 26px; height: 32px; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 15px; border: 1px solid var(--line); margin-right: -1px; background: var(--surface); white-space: pre; }
+.tr .c.unseen { color: var(--muted); background: transparent; opacity: 0.65; }
+.tr .c.seen { font-weight: 700; }
+.c.ok { background: var(--good-bg); color: var(--good); border-color: var(--good); font-weight: 700; z-index: 1; }
+.c.bad { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); font-weight: 700; z-index: 1; }
+.tr .c.found { box-shadow: inset 0 -4px 0 var(--accent); }
+.pr .c { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+.pr .c.ok { background: var(--good-bg); }
+.pr .c.bad { background: var(--bad-bg); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--line); }
+.legend .l-ok::before { background: var(--good-bg); border-color: var(--good); }
+.legend .l-bad::before { background: var(--bad-bg); border-color: var(--bad); }
+.legend .l-unseen::before { opacity: 0.5; }
+.legend .l-found::before { box-shadow: inset 0 -4px 0 var(--accent); }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 480px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 14px; vertical-align: middle; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.bar { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.bar i { display: block; height: 12px; background: var(--accent); border-radius: 2px; min-width: 2px; }
+.bar i.plain { background: var(--muted); }
+.bar span { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+table.shift { min-width: 0; width: auto; }
+table.shift td, table.shift th { padding: 4px 10px; font-family: var(--font-mono); font-size: 14px; text-align: center; text-transform: none; letter-spacing: 0; }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+@media (max-width: 920px) { .two { grid-template-columns: minmax(0, 1fr); } dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .pr { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>Read it backwards</h1>
+    <p class="lead">To find a word in a long text, the obvious method checks every position from the left. A cleverer method lines the word up and compares it starting from its <em>last</em> letter. That odd choice lets it jump ahead and skip most of the text without ever looking at it. This page builds the idea up with a version called Boyer&ndash;Moore&ndash;Horspool, and measures how much it skips.</p>
+  </header>
+
+  <section aria-labelledby="h-plain">
+    <h2 id="h-plain">The obvious way</h2>
+    <p>Write the text on one line and the word you want, the <strong>pattern</strong>, underneath. Start with the pattern at the left edge. Compare its letters with the text above them, one by one from the left. If they all match, you have found it. If one differs, slide the pattern one place to the right and try again.</p>
+    <p>That is correct and easy to write, but every letter of the text gets looked at, and often several times, because after a mismatch the next attempt starts again from the pattern&rsquo;s first letter. Most mismatches come on the first or second letter, so the cost is typically between one and two comparisons per letter of text, depending on the kind of text. The question is whether we can do better than looking at every letter. It sounds impossible, but it is not.</p>
+  </section>
+
+  <section aria-labelledby="h-back">
+    <h2 id="h-back">Start from the other end</h2>
+    <p>Suppose the pattern is <code>stone</code> and it is currently lined up under the text letters <code>x y z w q</code>. Compare the <em>last</em> letters first: <code>e</code> against <code>q</code>. They differ. Now ask a different question: could <em>any</em> alignment put the pattern&rsquo;s last place under that <code>q</code> and still match? Only if the pattern contains a <code>q</code>. It does not. So no alignment that covers that <code>q</code> can possibly match, and we can slide the pattern completely past it, by the full length of the pattern, five places, without looking at the four letters in between.</p>
+    <p>If the text letter under the pattern&rsquo;s last place <em>is</em> in the pattern, slide just far enough to line up the nearest copy of that letter in the pattern with it. That gives a small table, one number per letter of the pattern: how far from the end of the pattern its last occurrence is. Letters not in the pattern get the full length. This version, which only ever looks at the text letter under the pattern&rsquo;s last place to decide the slide, is called <strong>Boyer&ndash;Moore&ndash;Horspool</strong>. The original Boyer&ndash;Moore adds a second rule, noted near the end.</p>
+    <p>Notice what this does: a longer pattern means <em>bigger</em> jumps. The usual intuition is that a longer word is harder to find. Here it is easier.</p>
+  </section>
+
+  <section aria-labelledby="h-watch">
+    <h2 id="h-watch">Watch it work</h2>
+    <p>Change the text or the pattern, choose a method and step through. Dimmed text letters have never been looked at. Compare the two methods on the same input and watch the counters. Matching is case-sensitive.</p>
+    <div class="panel">
+      <div class="two">
+        <label class="field" for="text"><span class="lab">Text (up to 60 characters)</span><input type="text" id="text" maxlength="60" autocomplete="off" spellcheck="false"></label>
+        <label class="field" for="pat"><span class="lab">Pattern</span><input type="text" id="pat" maxlength="20" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="row">
+        <div class="field"><span class="lab" id="lab-algo">Method</span><div class="seg" role="radiogroup" aria-labelledby="lab-algo" id="seg-algo"></div></div>
+      </div>
+      <div class="legend" aria-hidden="true"><span class="l-ok">equal</span><span class="l-bad">different</span><span class="l-unseen">never looked at</span><span class="l-found">match found</span></div>
+      <div class="stage" id="stage" aria-label="The text with the pattern under it"></div>
+      <div class="row">
+        <button class="btn" type="button" id="b-back">Back</button>
+        <button class="btn" type="button" id="b-next">Next step</button>
+        <button class="btn" type="button" id="b-play">Play</button>
+        <button class="btn" type="button" id="b-reset">Start again</button>
+        <label class="field"><span class="lab" id="lab-pos">Step</span><input type="range" id="pos" min="0" max="1" value="0" aria-labelledby="lab-pos"></label>
+      </div>
+      <p class="status" id="w-status" role="status" aria-live="polite"></p>
+      <div class="readout">
+        <div><span class="k">Comparisons</span><span class="v" id="r-cmp">0</span></div>
+        <div><span class="k">Alignments tried</span><span class="v" id="r-aln">0</span></div>
+        <div><span class="k">Text letters looked at</span><span class="v" id="r-seen">0</span></div>
+        <div><span class="k">Matches</span><span class="v" id="r-match">0</span></div>
+      </div>
+      <div class="field" id="shift-box"><span class="lab">Slide table for this pattern (letters not listed slide the full length)</span><div class="tablewrap" style="width:fit-content;max-width:100%"><table class="shift" id="shift"></table></div></div>
+    </div>
+    <details>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-algo"></div>
+    </details>
+    <p class="note">Each method is a generator that reports every comparison and every slide as it happens. The page collects those reports, which is how it draws the steps and counts the work. The search itself is just those few lines.</p>
+  </section>
+
+  <section aria-labelledby="h-race">
+    <h2 id="h-race">How much does it skip?</h2>
+    <p>One short example proves little. Here both methods search a made-up text of 100,000 characters. For each pattern length it takes three patterns copied from different places in the text, so every search has at least one match, and averages the <strong>comparisons per letter of text</strong>. Anything under 1 means the method looked at fewer letters than the text contains. The kind of text matters, so try each.</p>
+    <div class="panel">
+      <div class="row">
+        <div class="field"><span class="lab" id="lab-kind">Text</span><div class="seg" role="radiogroup" aria-labelledby="lab-kind" id="seg-kind"></div></div>
+      </div>
+      <div class="tablewrap"><table id="race"></table></div>
+      <p class="status" id="race-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>These numbers count comparisons, not time. A real search library also cares about the processor&rsquo;s memory behaviour and may use special instructions to scan quickly, so fewer comparisons does not always mean a faster program. Treat this as showing the idea, not as a benchmark.</p>
+  </section>
+
+  <section aria-labelledby="h-limits">
+    <h2 id="h-limits">When it does not help</h2>
+    <dl class="lines">
+      <div><dt>Very short patterns</dt><dd>A one-letter pattern can never jump more than one place. The method needs room to skip.</dd></div>
+      <div><dt>Tiny alphabets</dt><dd>In a text of only <code>0</code> and <code>1</code>, nearly every letter is in the pattern, so the jumps are short, and the method can end up looking at most of the text. Compare the binary results above with the English ones.</dd></div>
+      <div><dt>Repetitive text</dt><dd>With text like <code>aaaa&hellip;</code> and a pattern like <code>baaa</code>, the simple version can slide only a place at a time and has to compare most of the pattern each time. In the worst case it is no better than the obvious way. The full Boyer&ndash;Moore&rsquo;s extra rule exists to help there.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Full Boyer&ndash;Moore</dt><dd>Adds a &ldquo;good suffix&rdquo; rule. If the last few letters matched before a mismatch, slide to the next place in the pattern where that ending also occurs. The slide is the larger of what the two rules give. With a further refinement due to Galil, the worst case is time in proportion to the length of the text.</dd></div>
+      <div><dt>Knuth&ndash;Morris&ndash;Pratt</dt><dd>Reads the text strictly left to right and never steps back, by precomputing what a partial match tells you. Its guarantee holds on every input.</dd></div>
+      <div><dt>Rabin&ndash;Karp</dt><dd>Compares a hash of each window of text with a hash of the pattern, updated cheaply as the window slides. It extends well to searching for many patterns at once. The idea of hashing small windows also appears in <a href="../fuzzy-hashing/">Nearly the same</a>.</dd></div>
+      <div><dt>Aho&ndash;Corasick</dt><dd>Searches for a whole dictionary of patterns in one pass, using a trie with extra links. See <a href="../tries/">Shared beginnings</a> for the trie part.</dd></div>
+      <div><dt>Indexes</dt><dd>If you will search the same text many times, build an index once (a suffix array, say) instead of scanning each time, as on <a href="../shortest-unique-identifiers/">Just enough letters</a>.</dd></div>
+      <div><dt>GNU grep</dt><dd>Its original author, Mike Haertel, described its speed as coming from a Boyer&ndash;Moore search that looks first for the last byte of the pattern and skips ahead using a table, in a 2010 mailing-list post called &ldquo;why GNU grep is fast&rdquo;.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>The obvious search compares from the pattern&rsquo;s first letter and slides one place on a mismatch, so it looks at every letter of the text.</li>
+      <li>Comparing from the last letter lets one mismatch rule out many alignments at once.</li>
+      <li>A table with one number per letter says how far to slide. Letters absent from the pattern slide the whole length.</li>
+      <li>Longer patterns slide further, so the method usually looks at only a fraction of the text.</li>
+      <li>It helps least with short patterns, tiny alphabets and repetitive text.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+
+  /* ---------- the algorithms (displayed and run as written) ---------- */
+  function* naiveSteps(text, pat) {
+    for (let at = 0; at + pat.length <= text.length; at++) {
+      for (let j = 0; j < pat.length; j++) {
+        const same = text[at + j] === pat[j];
+        yield { at, j, same };               // one comparison
+        if (!same) break;
+      }
+      yield { at, slide: 1 };                // move along by one
+    }
+  }
+
+  const shiftTable = (pat) => {
+    // for each letter: how far its last occurrence (not counting the final place) is from the end
+    const shift = new Map();
+    for (let k = 0; k < pat.length - 1; k++) shift.set(pat[k], pat.length - 1 - k);
+    return shift;
+  };
+
+  function* horspoolSteps(text, pat) {
+    const m = pat.length, shift = shiftTable(pat);
+    let at = 0;
+    while (at + m <= text.length) {
+      for (let j = m - 1; j >= 0; j--) {     // compare from the last letter backwards
+        const same = text[at + j] === pat[j];
+        yield { at, j, same };
+        if (!same) break;
+      }
+      const slide = shift.get(text[at + m - 1]) ?? m;  // look at the letter under the pattern's end
+      yield { at, slide };
+      at += slide;
+    }
+  }
+
+  /* ---------- helpers that are not part of the idea ---------- */
+  const tally = (steps, n, m) => {
+    // turn the reports into counts
+    const seen = new Uint8Array(n);
+    let comparisons = 0, alignments = 0, good = 0, lastAt = -1;
+    const matches = [];
+    for (const e of steps) {
+      if (e.slide !== undefined) { good = 0; continue; }
+      comparisons++;
+      seen[e.at + e.j] = 1;
+      if (e.at !== lastAt) { alignments++; lastAt = e.at; }
+      if (e.same && ++good === m) matches.push(e.at);
+    }
+    let seenCount = 0;
+    for (let i = 0; i < n; i++) seenCount += seen[i];
+    return { comparisons, alignments, seen, seenCount, matches };
+  };
+  const ALGOS = {
+    naive: { name: 'Left to right', steps: naiveSteps },
+    back: { name: 'From the end', steps: horspoolSteps }
+  };
+
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|else|new|null|true|false|while|yield|break)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  [['naiveSteps', naiveSteps, 'the obvious way', 'function'], ['shiftTable', shiftTable, 'how far to slide for each letter', 'const'], ['horspoolSteps', horspoolSteps, 'from the end, with jumps', 'function']].forEach(([name, fn, tag, kind]) => {
+    const d = el('div', 'fn');
+    d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+    d.appendChild(codeBlock((kind === 'const' ? 'const ' + name + ' = ' : '') + dedent(fn.toString())));
+    $('code-algo').appendChild(d);
+  });
+
+  /* ---------- the workbench ---------- */
+  let algo = 'naive', events = [], pos = 0, timer = 0;
+  const CW = 25; // cell width in pixels, less the overlapped border
+  function rebuild() {
+    const text = $('text').value, pat = $('pat').value;
+    stop();
+    events = pat && pat.length <= text.length ? [...ALGOS[algo].steps(text, pat)] : [];
+    pos = 0;
+    $('pos').max = events.length; $('pos').value = 0;
+    draw();
+  }
+  function draw() {
+    const text = $('text').value, pat = $('pat').value, n = text.length, m = pat.length;
+    const upto = events.slice(0, pos);
+    const t = tally(upto, n, m);
+    const last = upto[upto.length - 1];
+    const at = last ? last.at : 0;
+    // alignment shown: the one of the latest report
+    const here = new Map();
+    upto.forEach((e) => { if (e.at === at && e.slide === undefined) here.set(e.j, e.same); });
+    const found = new Set(); t.matches.forEach((s) => { for (let k = 0; k < m; k++) found.add(s + k); });
+    const stage = $('stage'); stage.textContent = '';
+    const tr = el('div', 'tr');
+    [...text].forEach((ch, i) => {
+      let cls = 'c ' + (t.seen[i] ? 'seen' : 'unseen');
+      if (last && i >= at && i < at + m && here.has(i - at)) cls += here.get(i - at) ? ' ok' : ' bad';
+      if (found.has(i)) cls += ' found';
+      tr.appendChild(el('span', cls, ch));
+    });
+    const pr = el('div', 'pr'); pr.style.marginLeft = at * CW + 'px';
+    [...pat].forEach((ch, j) => pr.appendChild(el('span', 'c' + (last && here.has(j) ? (here.get(j) ? ' ok' : ' bad') : ''), ch)));
+    stage.append(tr, pr);
+    $('r-cmp').textContent = String(t.comparisons); $('r-aln').textContent = String(t.alignments);
+    $('r-seen').textContent = t.seenCount + ' of ' + n; $('r-match').textContent = String(t.matches.length);
+    $('pos').value = pos; $('b-back').disabled = pos === 0; $('b-next').disabled = pos >= events.length;
+    // shift table
+    const tbl = $('shift'); tbl.textContent = '';
+    $('shift-box').style.display = algo === 'back' && m ? '' : 'none';
+    if (algo === 'back' && m) {
+      const sh = shiftTable(pat), head = el('tr'), val = el('tr');
+      [...new Set([...pat])].forEach((ch) => { head.appendChild(el('th', null, ch === ' ' ? '␣' : ch)); val.appendChild(el('td', null, String(sh.get(ch) ?? m))); });
+      const th = el('thead'); th.appendChild(head); const tb = el('tbody'); tb.appendChild(val); tbl.append(th, tb);
+    }
+    // sentence
+    const s = $('w-status');
+    if (!m) s.textContent = 'Type a pattern to search for.';
+    else if (m > n) s.textContent = 'The pattern is longer than the text, so it cannot match anywhere.';
+    else if (!last) s.textContent = algo === 'naive' ? 'The pattern starts at the left edge. Press “Next step” to compare its first letter.' : 'The pattern starts at the left edge. This method compares from its last letter. Press “Next step”.';
+    else if (last.slide !== undefined) {
+      const under = text[last.at + m - 1];
+      s.textContent = algo === 'naive' ? 'Slide the pattern one place to the right.'
+        : 'Slide ' + plural(last.slide, 'place', 'places') + '. The text letter under the pattern’s last place is “' + under + '”, and ' + (last.slide === m && !shiftTable(pat).has(under) ? 'it does not appear earlier in the pattern, so the whole pattern length can be skipped.' : 'its nearest earlier copy in the pattern is ' + plural(last.slide, 'place', 'places') + ' from the end, so line that copy up with it.');
+    } else {
+      const x = text[last.at + last.j], y = pat[last.j];
+      s.textContent = 'Text letter “' + x + '” (position ' + (last.at + last.j + 1) + ') against pattern letter “' + y + '” (position ' + (last.j + 1) + '): ' + (last.same ? (last.j === (algo === 'naive' ? m - 1 : 0) ? 'equal, and that was the last one to check, so this is a match.' : 'equal, so go on.') : 'different, so this alignment fails.');
+    }
+    if (m && m <= n && pos >= events.length && events.length) s.textContent = 'Finished. ' + plural(t.comparisons, 'comparison', 'comparisons') + ', ' + plural(t.alignments, 'alignment', 'alignments') + ' tried, ' + t.seenCount + ' of ' + n + ' text letters looked at. ' + (t.matches.length ? 'Found at ' + (t.matches.length === 1 ? 'position ' : 'positions ') + t.matches.map((x) => x + 1).join(', ') + '.' : 'No match.');
+  }
+  function stop() { clearInterval(timer); timer = 0; $('b-play').textContent = 'Play'; }
+  function play() {
+    if (timer) { stop(); return; }
+    if (pos >= events.length) pos = 0;
+    $('b-play').textContent = 'Pause';
+    timer = setInterval(() => { if (pos >= events.length) { stop(); return; } pos++; draw(); }, 350);
+  }
+  function seg(id, name, registry, current, onPick) {
+    const e = $(id);
+    Object.entries(registry).forEach(([key, v]) => e.insertAdjacentHTML('beforeend', '<input type="radio" name="' + name + '" id="' + name + '-' + key + '" value="' + key + '"' + (key === current ? ' checked' : '') + '><label for="' + name + '-' + key + '">' + esc(v.name) + '</label>'));
+    e.addEventListener('change', (ev) => onPick(ev.target.value));
+  }
+  seg('seg-algo', 'algo', ALGOS, algo, (v) => { algo = v; rebuild(); });
+  $('text').addEventListener('input', rebuild); $('pat').addEventListener('input', rebuild);
+  $('b-next').addEventListener('click', () => { stop(); pos = Math.min(pos + 1, events.length); draw(); });
+  $('b-back').addEventListener('click', () => { stop(); pos = Math.max(pos - 1, 0); draw(); });
+  $('b-reset').addEventListener('click', () => { stop(); pos = 0; draw(); });
+  $('b-play').addEventListener('click', play);
+  $('pos').addEventListener('input', () => { stop(); pos = +$('pos').value; draw(); });
+
+  /* ---------- the race ---------- */
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const N = 100000, LENGTHS = [1, 2, 3, 4, 6, 8, 12, 16];
+  const WORDS = ['the', 'of', 'and', 'a', 'to', 'in', 'is', 'you', 'that', 'it', 'he', 'was', 'for', 'on', 'are', 'as', 'with', 'his', 'they', 'at', 'be', 'this', 'have', 'from', 'or', 'one', 'had', 'by', 'word', 'but', 'not', 'what', 'all', 'were', 'we', 'when', 'your', 'can', 'said', 'there', 'use', 'an', 'each', 'which', 'she', 'do', 'how', 'their', 'if', 'will'];
+  const KINDS = {
+    english: { name: 'English-like words', make: (r) => { let s = ''; while (s.length < N) s += WORDS[Math.floor(r() * WORDS.length)] + ' '; return s.slice(0, N); } },
+    dna: { name: 'DNA letters', make: (r) => Array.from({ length: N }, () => 'ACGT'[Math.floor(r() * 4)]).join('') },
+    binary: { name: 'Only 0 and 1', make: (r) => Array.from({ length: N }, () => (r() < 0.5 ? '0' : '1')).join('') }
+  };
+  const texts = {};
+  let kind = 'english';
+  function runRace() {
+    texts[kind] = texts[kind] || KINDS[kind].make(mulberry32(7));
+    const text = texts[kind], r = mulberry32(31), rows = [];
+    let agree = true;
+    LENGTHS.forEach((m) => {
+      const acc = { naive: 0, back: 0, seen: 0 }; const trials = 3;
+      for (let k = 0; k < trials; k++) {
+        const p = Math.floor(r() * (N - m)), pat = text.slice(p, p + m);
+        let want = 0; for (let i = text.indexOf(pat); i >= 0; i = text.indexOf(pat, i + 1)) want++;
+        const a = tally(naiveSteps(text, pat), N, m), b = tally(horspoolSteps(text, pat), N, m);
+        if (a.matches.length !== want || b.matches.length !== want) agree = false;
+        acc.naive += a.comparisons / N / trials; acc.back += b.comparisons / N / trials; acc.seen += b.seenCount / N / trials;
+      }
+      rows.push([m, acc.naive, acc.back, acc.seen]);
+    });
+    const max = Math.max(...rows.flatMap((x) => [x[1], x[2]]));
+    const tbl = $('race'); tbl.textContent = '';
+    tbl.innerHTML = '<thead><tr><th class="num">Pattern length</th><th>Left to right</th><th>From the end</th><th class="num">Text letters looked at, from the end</th></tr></thead>';
+    const body = el('tbody');
+    rows.forEach(([m, a, b, seen]) => {
+      const tr = el('tr'); tr.appendChild(el('td', 'num', String(m)));
+      [[a, 'plain'], [b, '']].forEach(([v, cls]) => {
+        const td = el('td'), bar = el('div', 'bar'), i = el('i', cls); i.style.width = Math.max(2, (v / max) * 160) + 'px';
+        bar.append(i, el('span', null, v.toFixed(2))); td.appendChild(bar); tr.appendChild(td);
+      });
+      tr.appendChild(el('td', 'num', (seen * 100).toFixed(0) + '%'));
+      body.appendChild(tr);
+    });
+    tbl.appendChild(body);
+    $('race-status').textContent = 'Comparisons per letter of text, averaged over three patterns. ' + (agree ? 'Both methods found exactly the matches the browser’s own search finds.' : 'The methods disagree with the browser’s own search, which should not happen.');
+  }
+  seg('seg-kind', 'kind', KINDS, kind, (v) => { kind = v; runRace(); });
+
+  $('text').value = 'a fox sat by the old stone wall at the edge of the shore';
+  $('pat').value = 'stone';
+  rebuild();
+  runRace();
+})();
+</script>
+</body>
+</html>

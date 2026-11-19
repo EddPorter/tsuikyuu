@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>What Changed</title>
+<meta name="description" content="An interactive explainer of how a diff finds what changed between two versions of a text, using the longest common subsequence and dynamic programming, and how edit distance differs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: one reading column that builds the idea in stages, each ending in a small workbench you can poke. */
+:root {
+  --bg: #eceff2; --surface: #fbfcfd; --cell: #f0f3f5; --ink: #16212b; --muted: #55646f; --line: #cdd5dc;
+  --accent: #2b2bd6; --accent-soft: #e3e3fb; --on-accent: #ffffff;
+  --add: #1d6f3d; --add-bg: #dff3e5; --del: #b3261e; --del-bg: #fbe3e1;
+  --code-bg: #15222c; --code-ink: #d8e2ea; --code-cm: #7f93a3; --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+    --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+    --add: #6fd78f; --add-bg: #17301f; --del: #ff9a92; --del-bg: #3a1b19; --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+  --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+  --add: #6fd78f; --add-bg: #17301f; --del: #ff9a92; --del-bg: #3a1b19; --code-bg: #0b1117;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+input[type="text"] { font: inherit; font-family: var(--font-mono); font-size: 15px; width: 100%; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+textarea { font: inherit; font-family: var(--font-mono); font-size: 13px; width: 100%; min-height: 170px; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; resize: vertical; white-space: pre; overflow: auto; }
+input[type="range"] { accent-color: var(--accent); width: 220px; max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
+.seg label:last-of-type { border-right: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.status { min-height: 2.4em; font-weight: 500; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* diff output */
+.diff { border: 1px solid var(--line); border-radius: 6px; background: var(--cell); padding: 6px 0; font-family: var(--font-mono); font-size: 13px; overflow-x: auto; }
+.diff .l { display: grid; grid-template-columns: 28px minmax(0, 1fr); padding: 0 8px 0 0; white-space: pre; }
+.diff .l b { text-align: center; font-weight: 700; }
+.diff .l.add { background: var(--add-bg); color: var(--add); }
+.diff .l.del { background: var(--del-bg); color: var(--del); }
+.diff .l.keep { color: var(--muted); }
+.inline { border: 1px solid var(--line); border-radius: 6px; background: var(--cell); padding: 10px 12px; font-family: var(--font-mono); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; }
+.inline .add, .strip .add { background: var(--add-bg); color: var(--add); border-bottom: 2px solid var(--add); }
+.inline .del, .strip .del { background: var(--del-bg); color: var(--del); text-decoration: line-through; }
+.inline .sub { background: var(--accent-soft); color: var(--accent); border-bottom: 2px dotted var(--accent); }
+.strip { display: flex; flex-wrap: wrap; gap: 3px; font-family: var(--font-mono); font-size: 16px; }
+.strip span { min-width: 1.6em; text-align: center; padding: 1px 4px; border-radius: 3px; border: 1px solid var(--line); background: var(--cell); }
+.strip span.keep { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.strip span.add, .strip span.del { border-color: currentColor; }
+
+/* grids */
+.gridwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 6px; }
+table.dp { border-collapse: collapse; font-family: var(--font-mono); font-size: 13px; width: auto; min-width: 0; }
+table.dp th, table.dp td { border: 1px solid var(--line); padding: 4px 6px; min-width: 34px; text-align: center; }
+table.dp th { background: var(--cell); font-weight: 700; color: var(--ink); font-size: 13px; text-transform: none; letter-spacing: 0; }
+table.dp td.blank { color: transparent; }
+table.dp td.eq { box-shadow: inset 0 0 0 2px var(--muted); }
+table.dp td.path { background: var(--accent-soft); font-weight: 700; }
+table.dp td.keep { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+table.dp td.now { outline: 3px solid var(--accent); outline-offset: -3px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table.parts { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
+table.parts th, table.parts td { text-align: left; padding: 8px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+table.parts th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+table.parts tr:last-child td { border-bottom: 0; }
+table.parts td:first-child { font-weight: 600; }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+@media (max-width: 920px) { .two { grid-template-columns: minmax(0, 1fr); } dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>What changed?</h1>
+    <p class="lead">A diff shows what changed between two versions of a text. It looks like bookkeeping, but behind it is one of the best-known uses of dynamic programming: finding the most that two texts have in common, and calling everything else a change. This page builds that idea up from two short strings to a full diff, and then to edit distance.</p>
+  </header>
+
+  <section aria-labelledby="h-what">
+    <h2 id="h-what">What a diff is</h2>
+    <p>Give a diff two versions. It prints what was removed, what was added and what stayed. Edit either side below. A diff can compare whole lines, as version control usually does, or words, or single letters.</p>
+    <div class="panel">
+      <div class="row" id="presets" role="group" aria-label="Examples"></div>
+      <div class="two">
+        <label class="field" for="ta"><span class="lab">Before</span><textarea id="ta" spellcheck="false"></textarea></label>
+        <label class="field" for="tb"><span class="lab">After</span><textarea id="tb" spellcheck="false"></textarea></label>
+      </div>
+      <div class="field"><span class="lab" id="lab-unit">Compare by</span><div class="seg" role="radiogroup" aria-labelledby="lab-unit" id="seg-unit"></div></div>
+      <div id="diff-out" aria-label="The differences"></div>
+      <p class="status" id="diff-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>Removed pieces are red and struck through (or marked with a minus), added pieces are green (or marked with a plus). One thing is worth noticing. The diff never says <em>why</em> something changed, and it does not know that a line was edited. It sees only that some pieces are in one version and not the other. The rest of this page is about how it decides which pieces count as the same.</p>
+  </section>
+
+  <section aria-labelledby="h-lcs">
+    <h2 id="h-lcs">Keep as much as possible</h2>
+    <p>Here is the central idea. Whatever the two versions share, in the same order, can be kept. Everything else in the first version is deleted and everything else in the second is added. So the smallest list of changes is found by keeping <em>as much as possible</em>. That is the <strong>longest common subsequence</strong>: the longest run of pieces that appear in both, in order, though not necessarily next to each other.</p>
+    <p>Try two short strings of letters. The starting pair is a standard textbook example.</p>
+    <div class="panel">
+      <div class="two">
+        <label class="field" for="s-a"><span class="lab">First string (up to 14 letters)</span><input type="text" id="s-a" maxlength="14" autocomplete="off" spellcheck="false"></label>
+        <label class="field" for="s-b"><span class="lab">Second string (up to 14 letters)</span><input type="text" id="s-b" maxlength="14" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="two">
+        <div class="field"><span class="lab">First, with the kept letters highlighted</span><div class="strip" id="strip-a"></div></div>
+        <div class="field"><span class="lab">Second</span><div class="strip" id="strip-b"></div></div>
+      </div>
+      <p class="status" id="lcs-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>There can be more than one longest subsequence of the same length, so different diff programs can give different, equally small answers. That is one reason two tools can disagree about a diff without either being wrong.</p>
+  </section>
+
+  <section aria-labelledby="h-grid">
+    <h2 id="h-grid">The grid</h2>
+    <p>How do we find it without trying every subsequence? A string of 14 letters has 16,384 subsequences (two choices, keep or drop, for each letter), and the number doubles with every letter added. Instead, build a grid with the first string down the side and the second across the top. The cell in row <em>i</em> and column <em>j</em> answers a small question: how long is the longest common subsequence of the <em>first i letters</em> of one string and the <em>first j letters</em> of the other?</p>
+    <p>Each cell is filled using only cells already filled:</p>
+    <dl class="lines">
+      <div><dt>The letters are equal</dt><dd>Take the cell diagonally up and to the left, and add one. We can keep this letter on top of the best answer for everything before it.</dd></div>
+      <div><dt>They differ</dt><dd>One of the two letters cannot be kept. Take the larger of the cell above (drop the side letter) and the cell to the left (drop the top letter).</dd></div>
+    </dl>
+    <p>The bottom-right cell is the answer for the whole strings. Step through it. Cells with a heavy grey border are where the two letters match. When the grid is full, walking back from the bottom-right corner gives the kept letters: a diagonal step along a matching cell keeps a letter (dark blue), and any other step is a deletion or an addition.</p>
+    <div class="panel">
+      <div class="row">
+        <button class="btn" type="button" id="g-step">Fill next cell</button>
+        <button class="btn" type="button" id="g-all">Fill the lot</button>
+        <button class="btn" type="button" id="g-reset">Start again</button>
+        <label class="field"><span class="lab" id="g-lab">Cells filled</span><input type="range" id="g-range" min="0" max="1" value="0" aria-labelledby="g-lab"></label>
+      </div>
+      <div class="gridwrap"><table class="dp" id="grid"></table></div>
+      <p class="status" id="g-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>The grid has one cell per pair of positions, so its size is the length of one string times the length of the other. That is a few hundred steps for these strings, rather than thousands of subsequences, and it grows by multiplication where trying every subsequence grows by doubling. This is the whole idea of dynamic programming: answer small questions first, write the answers down, and build the big answer from them.</p>
+    <details>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-lcs"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-edit">
+    <h2 id="h-edit">Edit distance: allow a swap</h2>
+    <p>A diff can only add and delete. If one letter becomes another, a diff sees a deletion plus an addition. Often what you want to know is <strong>how many single-letter edits turn one word into another</strong>, where an edit may be an insertion, a deletion or a substitution. That number is the <em>edit distance</em>, often called Levenshtein distance. It is what spelling correctors and &ldquo;did you mean&rdquo; suggestions use to rank candidate words.</p>
+    <p>The grid is almost the same, with two changes. It holds the smallest number of edits where the other held the longest common subsequence, and a substitution is a third way into each cell.</p>
+    <div class="panel">
+      <div class="two">
+        <label class="field" for="e-a"><span class="lab">From</span><input type="text" id="e-a" maxlength="14" autocomplete="off" spellcheck="false"></label>
+        <label class="field" for="e-b"><span class="lab">To</span><input type="text" id="e-b" maxlength="14" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="gridwrap"><table class="dp" id="e-grid"></table></div>
+      <div id="e-out" class="inline" aria-label="The edits"></div>
+      <p class="status" id="e-status" role="status" aria-live="polite"></p>
+    </div>
+    <details>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-edit"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-fast">
+    <h2 id="h-fast">Real files are big</h2>
+    <p>A source file can have thousands of lines. A grid of 1,500 by 1,500 has over two million cells, and it keeps all of them in memory so it can walk back. Real diff tools use shortcuts. The simplest is to trim first: lines that are identical at the very start or very end of both versions cannot be changes, so skip them and fill the grid only for the middle.</p>
+    <p>Try it. This makes two made-up files of 1,500 lines and changes some lines in the second. Then it finds the longest common subsequence twice, once on the whole files and once after trimming, and reports the work and the time. The result must agree.</p>
+    <div class="panel">
+      <div class="row">
+        <label class="field"><span class="lab" id="k-lab">Edits</span><input type="range" id="k-range" min="1" max="60" value="8" aria-labelledby="k-lab"></label>
+        <div class="field"><span class="lab" id="lab-where">Where the edits are</span><div class="seg" role="radiogroup" aria-labelledby="lab-where" id="seg-where"></div></div>
+        <button class="btn" type="button" id="big-run">Run</button>
+      </div>
+      <div class="readout">
+        <div><span class="k">Lines per file</span><span class="v" id="b-n">0</span></div>
+        <div><span class="k">Trimmed from the start</span><span class="v" id="b-p">0</span></div>
+        <div><span class="k">Trimmed from the end</span><span class="v" id="b-s">0</span></div>
+        <div><span class="k">Cells, whole files</span><span class="v" id="b-full">0</span></div>
+        <div><span class="k">Cells, after trimming</span><span class="v" id="b-trim">0</span></div>
+        <div><span class="k">Time, whole files</span><span class="v" id="b-tfull">0 ms</span></div>
+        <div><span class="k">Time, after trimming</span><span class="v" id="b-ttrim">0 ms</span></div>
+      </div>
+      <p class="status" id="b-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>Trimming helps a great deal when the changes are bunched together, and much less when they are spread through the file, because it can only remove the untouched ends. Real tools do more than that, and the next section names some of what they do.</p>
+    <details>
+      <summary>The trimming code (also what this page runs)</summary>
+      <div class="stack" id="code-trim"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-parts">
+    <h2 id="h-parts">The parts you can swap</h2>
+    <div class="tablewrap">
+      <table class="parts">
+        <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
+        <tbody>
+          <tr><td>The unit</td><td>Lines, words, letters</td><td>How fine the changes are. Lines suit source code, words suit prose, letters suit short strings.</td></tr>
+          <tr><td>What counts as equal</td><td>Exact, ignoring case, ignoring spaces</td><td>Which differences are noticed at all. It is one function, so it is easy to swap.</td></tr>
+          <tr><td>The allowed edits</td><td>Add and delete (diff), or also substitute (edit distance)</td><td>The grid keeps the same shape and the cost of each step changes.</td></tr>
+          <tr><td>Ties</td><td>Prefer deleting first, or adding first</td><td>Which of several equally short diffs is shown.</td></tr>
+          <tr><td>Costs</td><td>Every edit costs one, or some cost more</td><td>A substitution could cost two, which makes it the same as a delete plus an add.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Myers&rsquo; diff algorithm</dt><dd>A faster method that does work in proportion to the number of changes, so two nearly identical files are cheap. Git&rsquo;s documentation lists it as the default algorithm, alongside <code>minimal</code>, <code>patience</code> and <code>histogram</code> options.</dd></div>
+      <div><dt>Hirschberg&rsquo;s algorithm</dt><dd>Finds the same answer as the grid while keeping only a couple of rows in memory, by splitting the problem in half repeatedly.</dd></div>
+      <div><dt>Patience and histogram diff</dt><dd>Variants that anchor on lines occurring exactly once, which often give diffs that read better for source code, even when they are not the shortest.</dd></div>
+      <div><dt>Needleman&ndash;Wunsch, Smith&ndash;Waterman</dt><dd>The same grid applied to DNA and protein sequences, with scores for matches and gaps. A close relative of the scoring grid on <a href="../fuzzy-finding/">Best match first</a>.</dd></div>
+      <div><dt>Three-way merge</dt><dd>Diffing two edited copies against a common ancestor, which is how tools merge branches.</dd></div>
+      <div><dt>Related pages</dt><dd>Another use of a grid, ranking fuzzy matches, is <a href="../fuzzy-finding/">Best match first</a>. Spotting near-copies without aligning them is <a href="../fuzzy-hashing/">Nearly the same</a>.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>A diff keeps what two versions share, in order, and calls the rest changes.</li>
+      <li>Keeping as much as possible is the longest common subsequence problem.</li>
+      <li>Trying every subsequence doubles with each letter. A grid of small answers needs only one cell per pair of positions.</li>
+      <li>Each cell depends only on three neighbours, so it is filled in order and walked back to recover the answer.</li>
+      <li>Edit distance is the same grid with a substitution allowed and the smallest count in place of the longest run.</li>
+      <li>Real tools trim, and use cleverer methods, to cope with large files.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+
+  /* ---------- the algorithms (displayed and run as written) ---------- */
+  const lcsTable = (a, b, same) => {
+    // t[i][j] = length of the longest common subsequence of a[0..i) and b[0..j)
+    const t = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        t[i][j] = same(a[i - 1], b[j - 1])
+          ? t[i - 1][j - 1] + 1
+          : Math.max(t[i - 1][j], t[i][j - 1]);
+      }
+    }
+    return t;
+  };
+
+  const walkBack = (a, b, t, same) => {
+    // from the bottom-right corner to the top-left, saying keep, add or delete
+    const ops = [], path = [[a.length, b.length]];
+    let i = a.length, j = b.length;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && same(a[i - 1], b[j - 1])) {
+        ops.push({ op: 'keep', a: a[i - 1], b: b[j - 1] }); i--; j--;
+      } else if (j > 0 && (i === 0 || t[i][j - 1] >= t[i - 1][j])) {
+        ops.push({ op: 'add', b: b[j - 1] }); j--;
+      } else {
+        ops.push({ op: 'del', a: a[i - 1] }); i--;
+      }
+      path.push([i, j]);
+    }
+    return { ops: ops.reverse(), path };
+  };
+
+  const editTable = (a, b) => {
+    // d[i][j] = fewest edits to turn a[0..i) into b[0..j)
+    const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...new Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        d[i][j] = Math.min(
+          d[i - 1][j] + 1,                                  // delete a letter
+          d[i][j - 1] + 1,                                  // insert a letter
+          d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1) // keep, or swap
+        );
+      }
+    }
+    return d;
+  };
+
+  const editSteps = (a, b, d) => {
+    const steps = [], path = [[a.length, b.length]];
+    let i = a.length, j = b.length;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && d[i][j] === d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)) {
+        steps.push(a[i - 1] === b[j - 1] ? { op: 'keep', a: a[i - 1] } : { op: 'sub', a: a[i - 1], b: b[j - 1] }); i--; j--;
+      } else if (j > 0 && d[i][j] === d[i][j - 1] + 1) {
+        steps.push({ op: 'add', b: b[j - 1] }); j--;
+      } else {
+        steps.push({ op: 'del', a: a[i - 1] }); i--;
+      }
+      path.push([i, j]);
+    }
+    return { steps: steps.reverse(), path };
+  };
+
+  const trimCommon = (a, b, same) => {
+    let p = 0;
+    while (p < a.length && p < b.length && same(a[p], b[p])) p++;
+    let s = 0;
+    while (s < a.length - p && s < b.length - p && same(a[a.length - 1 - s], b[b.length - 1 - s])) s++;
+    return { p, s };
+  };
+
+  /* ---------- helpers that are not part of the idea ---------- */
+  const exact = (x, y) => x === y;
+  const UNITS = {
+    lines: { name: 'Lines', split: (t) => (t === '' ? [] : t.split('\n')), join: '\n' },
+    words: { name: 'Words', split: (t) => t.match(/\s+|\S+/g) || [], join: '' },
+    letters: { name: 'Letters', split: (t) => [...t], join: '' }
+  };
+  const CAP = 600;
+
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|else|new|null|true|false|while)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  function showCode(id, items) {
+    items.forEach(([name, fn, tag]) => {
+      const d = el('div', 'fn');
+      d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+      d.appendChild(codeBlock('const ' + name + ' = ' + dedent(fn.toString())));
+      $(id).appendChild(d);
+    });
+  }
+  showCode('code-lcs', [['lcsTable', lcsTable, 'fill the grid'], ['walkBack', walkBack, 'read the answer off it']]);
+  showCode('code-edit', [['editTable', editTable, 'fill the grid'], ['editSteps', editSteps, 'read the edits off it']]);
+  showCode('code-trim', [['trimCommon', trimCommon, 'skip the unchanged ends']]);
+
+  /* ---------- section 1: a diff ---------- */
+  const PRESETS = [
+    ['Code', 'lines', `function total(items) {
+  let sum = 0;
+  for (const item of items) {
+    sum += item.price;
+  }
+  return sum;
+}`, `function total(items, rate) {
+  let sum = 0;
+  for (const item of items) {
+    sum += item.price * item.qty;
+  }
+  return sum * (1 + rate);
+}`],
+    ['Recipe', 'lines', `Mix the flour and sugar.
+Add two eggs.
+Beat until smooth.
+Bake for 20 minutes.`, `Mix the flour and sugar.
+Add three eggs and a pinch of salt.
+Beat until smooth.
+Bake for 25 minutes.
+Leave to cool.`],
+    ['Sentence', 'words', 'The quick brown fox jumps over the lazy dog.', 'The quick red fox leaps over the very lazy dog.']
+  ];
+  let unit = 'lines';
+  function drawDiff() {
+    const U = UNITS[unit];
+    let a = U.split($('ta').value), b = U.split($('tb').value);
+    const out = $('diff-out'); out.textContent = '';
+    if (a.length > CAP || b.length > CAP) { a = a.slice(0, CAP); b = b.slice(0, CAP); }
+    const t = lcsTable(a, b, exact);
+    const { ops } = walkBack(a, b, t, exact);
+    const n = (k) => ops.filter((o) => o.op === k).length;
+    if (unit === 'lines') {
+      const box = el('div', 'diff');
+      ops.forEach((o) => {
+        const row = el('div', 'l ' + o.op);
+        row.append(el('b', null, o.op === 'add' ? '+' : o.op === 'del' ? '−' : ' '), el('span', null, o.op === 'add' ? o.b : o.a));
+        box.appendChild(row);
+      });
+      out.appendChild(box);
+    } else {
+      const box = el('div', 'inline');
+      ops.forEach((o) => box.appendChild(el('span', o.op === 'keep' ? '' : o.op, o.op === 'add' ? o.b : o.a)));
+      out.appendChild(box);
+    }
+    const word = { lines: ['line', 'lines'], words: ['piece', 'pieces'], letters: ['letter', 'letters'] }[unit];
+    $('diff-status').textContent = 'Kept ' + plural(n('keep'), word[0], word[1]) + ', removed ' + n('del') + ', added ' + n('add') + '. ' +
+      (n('keep') === 0 && (a.length || b.length) ? 'Nothing is shared, so everything is replaced.' : (n('del') + n('add') === 0 ? 'The two versions are identical.' : ''));
+    if (unit === 'words') $('diff-status').textContent += ' Spaces count as pieces, so a changed word may show its neighbouring space too.';
+  }
+
+  /* ---------- sections 2 and 3: the letters and the grid ---------- */
+  function strips() {
+    const a = [...$('s-a').value], b = [...$('s-b').value];
+    const t = lcsTable(a, b, exact), { ops } = walkBack(a, b, t, exact);
+    const sa = $('strip-a'), sb = $('strip-b'); sa.textContent = ''; sb.textContent = '';
+    ops.forEach((o) => {
+      if (o.op === 'keep') { sa.appendChild(el('span', 'keep', o.a)); sb.appendChild(el('span', 'keep', o.b)); }
+      else if (o.op === 'del') sa.appendChild(el('span', 'del', o.a));
+      else sb.appendChild(el('span', 'add', o.b));
+    });
+    const kept = ops.filter((o) => o.op === 'keep').map((o) => o.a).join('');
+    const len = t[a.length][b.length], changes = a.length + b.length - 2 * len;
+    $('lcs-status').textContent = !a.length && !b.length ? 'Type two strings.' :
+      'The longest common subsequence has length ' + len + (len ? ': “' + kept + '”' : '') + '. The first string has ' + a.length + ' letters and the second ' + b.length + ', so ' + (a.length - len) + ' are deleted and ' + (b.length - len) + ' are added, ' + plural(changes, 'change', 'changes') + ' in all. The first string alone has ' + (2 ** a.length).toLocaleString('en-GB') + ' subsequences to choose from.';
+  }
+  let filled = 0;
+  function drawGrid() {
+    const a = [...$('s-a').value], b = [...$('s-b').value], tbl = $('grid');
+    tbl.textContent = '';
+    const total = a.length * b.length;
+    $('g-range').max = total; filled = Math.min(filled, total); $('g-range').value = filled;
+    const t = lcsTable(a, b, exact);
+    const done = filled === total;
+    const { ops, path } = walkBack(a, b, t, exact);
+    const onPath = new Set(path.map(([i, j]) => i + ':' + j));
+    const keeps = new Set();
+    { let i = a.length, j = b.length; ops.slice().reverse().forEach((o) => { if (o.op === 'keep') { keeps.add(i + ':' + j); i--; j--; } else if (o.op === 'add') j--; else i--; }); }
+    const nowI = filled ? Math.floor((filled - 1) / b.length) + 1 : 0, nowJ = filled ? (filled - 1) % b.length + 1 : 0;
+    const head = el('tr', null); head.append(el('th'), el('th'));
+    b.forEach((ch) => head.appendChild(el('th', null, ch)));
+    const thead = el('thead'); thead.appendChild(head); tbl.appendChild(thead);
+    const body = el('tbody');
+    for (let i = 0; i <= a.length; i++) {
+      const tr = el('tr'); tr.appendChild(el('th', null, i ? a[i - 1] : ''));
+      for (let j = 0; j <= b.length; j++) {
+        const isFilled = i === 0 || j === 0 || (i - 1) * b.length + j <= filled;
+        const key = i + ':' + j;
+        let cls = isFilled ? '' : 'blank';
+        if (i && j && isFilled && a[i - 1] === b[j - 1]) cls += ' eq';
+        if (done && onPath.has(key)) cls += keeps.has(key) ? ' keep' : ' path';
+        if (i === nowI && j === nowJ && filled && !done) cls += ' now';
+        tr.appendChild(el('td', cls.trim(), String(t[i][j])));
+      }
+      body.appendChild(tr);
+    }
+    tbl.appendChild(body);
+    if (!total) $('g-status').textContent = 'Type two non-empty strings above.';
+    else if (!filled) $('g-status').textContent = 'The first row and column are zero: with nothing from one string, nothing can be shared. Press “Fill next cell”.';
+    else if (!done) {
+      const x = a[nowI - 1], y = b[nowJ - 1];
+      $('g-status').textContent = 'Cell for “' + a.slice(0, nowI).join('') + '” against “' + b.slice(0, nowJ).join('') + '”. ' +
+        (x === y ? 'The letters ' + x + ' and ' + y + ' are equal, so take the diagonal (' + t[nowI - 1][nowJ - 1] + ') and add one: ' + t[nowI][nowJ] + '.'
+          : 'The letters ' + x + ' and ' + y + ' differ, so take the larger of above (' + t[nowI - 1][nowJ] + ') and left (' + t[nowI][nowJ - 1] + '): ' + t[nowI][nowJ] + '.');
+    } else $('g-status').textContent = 'The grid is full. The bottom-right cell says the longest common subsequence has length ' + t[a.length][b.length] + '. The shaded path is the walk back; dark cells are kept letters.';
+  }
+
+  /* ---------- section 4: edit distance ---------- */
+  function drawEdit() {
+    const a = [...$('e-a').value], b = [...$('e-b').value], tbl = $('e-grid'), out = $('e-out');
+    tbl.textContent = ''; out.textContent = '';
+    const d = editTable(a, b), { steps, path } = editSteps(a, b, d);
+    const onPath = new Set(path.map(([i, j]) => i + ':' + j));
+    const head = el('tr'); head.append(el('th'), el('th'));
+    b.forEach((ch) => head.appendChild(el('th', null, ch)));
+    const thead = el('thead'); thead.appendChild(head); tbl.appendChild(thead);
+    const body = el('tbody');
+    for (let i = 0; i <= a.length; i++) {
+      const tr = el('tr'); tr.appendChild(el('th', null, i ? a[i - 1] : ''));
+      for (let j = 0; j <= b.length; j++) tr.appendChild(el('td', onPath.has(i + ':' + j) ? 'path' : '', String(d[i][j])));
+      body.appendChild(tr);
+    }
+    tbl.appendChild(body);
+    steps.forEach((s) => out.appendChild(el('span', s.op === 'keep' ? '' : s.op, s.op === 'add' ? s.b : s.op === 'sub' ? s.a + '→' + s.b : s.a)));
+    const dist = d[a.length][b.length];
+    const lcs = lcsTable(a, b, exact)[a.length][b.length], asDiff = a.length + b.length - 2 * lcs;
+    const sub = steps.filter((s) => s.op === 'sub').map((s) => s.a + ' to ' + s.b), ins = steps.filter((s) => s.op === 'add').map((s) => s.b), del = steps.filter((s) => s.op === 'del').map((s) => s.a);
+    const bits = [];
+    if (sub.length) bits.push('swap ' + sub.join(', '));
+    if (ins.length) bits.push('insert ' + ins.join(', '));
+    if (del.length) bits.push('delete ' + del.join(', '));
+    $('e-status').textContent = !a.length && !b.length ? 'Type two words.' : 'Edit distance ' + dist + (bits.length ? ': ' + bits.join('; ') : '') + '. As a plain diff, which cannot swap, the same pair needs ' + plural(asDiff, 'change', 'changes') + '. In the picture, blue with an arrow is a swap, green an insertion and red a deletion.';
+  }
+
+  /* ---------- section 5: big files ---------- */
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  let where = 'clustered';
+  const WHERE = { clustered: { name: 'Bunched together' }, spread: { name: 'Spread through the file' } };
+  const N = 1500;
+  function makeBig(k, mode) {
+    const r = mulberry32(99);
+    const words = ['alpha', 'beta', 'gamma', 'delta', 'omega', 'sigma', 'kappa', 'theta'];
+    const base = Array.from({ length: N }, (_, i) => 'line ' + i + ' ' + words[Math.floor(r() * 8)] + ' ' + Math.floor(r() * 1000));
+    const after = base.slice();
+    const mid = Math.floor(N / 2);
+    const pos = Array.from({ length: k }, (_, e) => mode === 'clustered' ? mid + e * 2 - k : Math.floor(r() * N));
+    pos.sort((x, y) => y - x);
+    pos.forEach((p, e) => {
+      const kind = e % 4;
+      if (kind === 0 || kind === 1) after[p] = after[p] + ' (edited)';
+      else if (kind === 2) after.splice(p, 1);
+      else after.splice(p, 0, 'new line ' + e);
+    });
+    return [base, after];
+  }
+  function runBig() {
+    const k = +$('k-range').value;
+    const [a, b] = makeBig(k, where);
+    const { p, s } = trimCommon(a, b, exact);
+    const t0 = performance.now();
+    const full = lcsTable(a, b, exact)[a.length][b.length];
+    const t1 = performance.now();
+    const ma = a.slice(p, a.length - s), mb = b.slice(p, b.length - s);
+    const trimmed = p + s + lcsTable(ma, mb, exact)[ma.length][mb.length];
+    const t2 = performance.now();
+    $('b-n').textContent = String(N); $('b-p').textContent = String(p); $('b-s').textContent = String(s);
+    $('b-full').textContent = ((a.length + 1) * (b.length + 1)).toLocaleString('en-GB');
+    $('b-trim').textContent = ((ma.length + 1) * (mb.length + 1)).toLocaleString('en-GB');
+    $('b-tfull').textContent = (t1 - t0).toFixed(0) + ' ms'; $('b-ttrim').textContent = (t2 - t1).toFixed(0) + ' ms';
+    $('b-status').textContent = 'Both ways keep ' + full + ' lines' + (full === trimmed ? ', so trimming gave the same answer.' : ', but they disagree, which should not happen.') +
+      ' Times are for this browser on this device and vary from run to run.';
+  }
+
+  /* ---------- wiring ---------- */
+  function seg(id, name, registry, current, onPick) {
+    const e = $(id);
+    Object.entries(registry).forEach(([key, v]) => e.insertAdjacentHTML('beforeend', '<input type="radio" name="' + name + '" id="' + name + '-' + key + '" value="' + key + '"' + (key === current ? ' checked' : '') + '><label for="' + name + '-' + key + '">' + esc(v.name) + '</label>'));
+    e.addEventListener('change', (ev) => onPick(ev.target.value));
+  }
+  seg('seg-unit', 'unit', UNITS, unit, (v) => { unit = v; drawDiff(); });
+  seg('seg-where', 'where', WHERE, where, (v) => { where = v; runBig(); });
+  PRESETS.forEach(([label, u, a, b]) => {
+    const btn = el('button', 'btn small', label); btn.type = 'button';
+    btn.addEventListener('click', () => { $('ta').value = a; $('tb').value = b; unit = u; $('unit-' + u).checked = true; drawDiff(); });
+    $('presets').appendChild(btn);
+  });
+  $('ta').addEventListener('input', drawDiff); $('tb').addEventListener('input', drawDiff);
+  const letters = () => { filled = 0; strips(); drawGrid(); };
+  $('s-a').addEventListener('input', letters); $('s-b').addEventListener('input', letters);
+  $('g-step').addEventListener('click', () => { filled = Math.min(filled + 1, $('s-a').value.length * $('s-b').value.length); drawGrid(); });
+  $('g-all').addEventListener('click', () => { filled = $('s-a').value.length * $('s-b').value.length; drawGrid(); });
+  $('g-reset').addEventListener('click', () => { filled = 0; drawGrid(); });
+  $('g-range').addEventListener('input', () => { filled = +$('g-range').value; drawGrid(); });
+  $('e-a').addEventListener('input', drawEdit); $('e-b').addEventListener('input', drawEdit);
+  $('big-run').addEventListener('click', runBig);
+  $('k-range').addEventListener('input', () => { $('k-lab').textContent = 'Edits: ' + $('k-range').value; });
+
+  $('ta').value = PRESETS[0][2]; $('tb').value = PRESETS[0][3];
+  $('s-a').value = 'ABCBDAB'; $('s-b').value = 'BDCABA';
+  $('e-a').value = 'kitten'; $('e-b').value = 'sitting';
+  $('k-lab').textContent = 'Edits: 8';
+  drawDiff(); strips(); drawGrid(); drawEdit(); runBig();
+})();
+</script>
+</body>
+</html>

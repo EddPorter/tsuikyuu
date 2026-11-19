@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Whole Paragraph</title>
+<meta name="description" content="An interactive explainer of optimal line breaking, the idea behind the Knuth-Plass algorithm: why filling each line greedily gives worse paragraphs, and how dynamic programming chooses every break together.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: one reading column that builds the idea in stages, each ending in a small workbench you can poke. */
+:root {
+  --bg: #eceff2; --surface: #fbfcfd; --cell: #f0f3f5; --ink: #16212b; --muted: #55646f; --line: #cdd5dc;
+  --accent: #2b2bd6; --accent-soft: #e3e3fb; --on-accent: #ffffff;
+  --loose: #f6d5a8; --tight: #bfe3c8;
+  --code-bg: #15222c; --code-ink: #d8e2ea; --code-cm: #7f93a3; --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+    --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --loose: #5a4420; --tight: #1f4a2f; --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+  --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --loose: #5a4420; --tight: #1f4a2f; --code-bg: #0b1117;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+h3 { font-size: 1.15rem; font-weight: 700; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+textarea { font: inherit; font-size: 15px; width: 100%; min-height: 110px; padding: 8px 10px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+input[type="range"] { accent-color: var(--accent); width: 260px; max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 12px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
+.seg label:last-of-type { border-right: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+.status { min-height: 2.4em; font-weight: 500; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* a column of set text */
+.col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.page { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); padding: 10px; }
+.page .inner { position: relative; font-family: var(--font-mono); font-size: 14px; line-height: 1.5; box-shadow: 2px 0 0 0 var(--muted); }
+.ln2 { display: flex; white-space: pre; padding: 1px 0; }
+.ln2.ragged { width: max-content; }
+.ln2.fill { justify-content: space-between; }
+.ln2 .gap { white-space: pre; }
+.ln2.tightl { background: var(--tight); }
+.ln2.loosel { background: var(--loose); }
+.ln2 + .ln2 { margin-top: 2px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; }
+th, td { text-align: left; padding: 6px 12px; vertical-align: middle; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+td.mono { font-family: var(--font-mono); white-space: pre; }
+tr.pick td { background: var(--accent-soft); font-weight: 600; }
+.tag { font-family: var(--font-body); font-size: 11px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--accent); background: var(--surface); margin-left: 8px; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--line); }
+.legend .l-tight::before { background: var(--tight); }
+.legend .l-loose::before { background: var(--loose); }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+@media (max-width: 920px) { .two { grid-template-columns: minmax(0, 1fr); } dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>The whole paragraph</h1>
+    <p class="lead">Every word processor has to break a paragraph into lines. The obvious method fills each line as full as it can and moves on. A better one looks at the whole paragraph and chooses all the breaks together, accepting a slightly short line here so that nothing is badly stretched there. This page shows why the obvious method falls short, and how dynamic programming picks the best breaks. It is the idea behind the line breaking in TeX, due to Knuth and Plass.</p>
+  </header>
+
+  <section aria-labelledby="h-greedy">
+    <h2 id="h-greedy">The obvious way</h2>
+    <p>Put words on a line while the next one still fits. When it does not, start a new line. This is <strong>greedy</strong>: each line takes everything it can, and a decision once made is never revisited. It is simple, quick, and it is what most text boxes do.</p>
+    <p>The trouble is that taking everything on one line can leave the next line with awkward material. A long word may not fit, and then the next line starts with it while the previous line is left short. You can have a nice line followed by a dreadful one, and no way back.</p>
+  </section>
+
+  <section aria-labelledby="h-score">
+    <h2 id="h-score">Scoring a line</h2>
+    <p>To compare two ways of setting a paragraph we need a number for each. This page uses a simple one. Each line has a width, measured in characters, and the words plus single spaces take up some of it. The unused remainder is the line&rsquo;s <strong>slack</strong>. In a justified paragraph that slack has to be spread across the gaps between words, so a line with a lot of slack looks loose and gappy. The <strong>cost</strong> of a line is its slack raised to a power. A power above one makes one very loose line cost much more than several slightly loose ones, which is usually what you want. The last line of a paragraph is allowed to be short, so it costs nothing.</p>
+    <p>The best setting is the one with the smallest total cost over all the lines. Greedy does not look at the total at all.</p>
+  </section>
+
+  <section aria-labelledby="h-watch">
+    <h2 id="h-watch">Side by side</h2>
+    <p>Edit the paragraph, then drag the width. Each width gives a different set of lines. Notice that the two methods often agree and sometimes do not. Where they differ, the best setting usually has a smaller worst line, even though some line may be a bit shorter.</p>
+    <div class="panel">
+      <label class="field" for="para"><span class="lab">Paragraph</span><textarea id="para" spellcheck="true"></textarea></label>
+      <div class="row">
+        <label class="field"><span class="lab" id="w-lab">Line width</span><input type="range" id="width" min="20" max="60" value="26" aria-labelledby="w-lab"></label>
+        <div class="field"><span class="lab" id="lab-show">Show lines as</span><div class="seg" role="radiogroup" aria-labelledby="lab-show" id="seg-show"></div></div>
+        <div class="field"><span class="lab" id="lab-pow">Cost of a line</span><div class="seg" role="radiogroup" aria-labelledby="lab-pow" id="seg-pow"></div></div>
+      </div>
+      <div class="legend" aria-hidden="true"><span class="l-tight">snug line (slack 0 to 2)</span><span class="l-loose">loose line (slack more than 6)</span></div>
+      <div class="two">
+        <div class="col"><h3>Greedy</h3><div class="page" id="pg-g" aria-label="Paragraph set greedily"></div><div class="readout" id="ro-g"></div></div>
+        <div class="col"><h3>Best overall</h3><div class="page" id="pg-o" aria-label="Paragraph set optimally"></div><div class="readout" id="ro-o"></div></div>
+      </div>
+      <p class="status" id="w-status" role="status" aria-live="polite"></p>
+    </div>
+    <p class="note">The text is set in a monospace font so that widths are exact counts of characters. Real typesetting uses the width of each letter and gaps that can stretch and shrink, but the choice of breaks works the same way.</p>
+  </section>
+
+  <section aria-labelledby="h-dp">
+    <h2 id="h-dp">Choosing all the breaks together</h2>
+    <p>There are far too many ways to break a paragraph to try them all: each gap between words is a possible break or not, so a 100-word paragraph has an astronomical number of settings. But we can use a trick we have met before, on <a href="../fuzzy-finding/">Best match first</a> and <a href="../what-changed/">What changed?</a>: answer small questions first, remember the answers, and build up.</p>
+    <p>The small question is: <em>what is the cheapest way to set just the first <var>j</var> words?</em> Call the answer <code>best[j]</code>. To work it out, ask where the last line starts. If it starts at word <var>i</var>, then the cost is <code>best[i]</code>, the cheapest way to set everything before it, plus the cost of that one last line. Try every <var>i</var> for which the line fits, and take the cheapest. The answers for smaller <var>j</var> are already known, so each step needs only a short list of candidates. The answer for all the words is <code>best[n]</code>, and remembering which <var>i</var> won each time lets you walk back and read off the lines.</p>
+    <p>Drag the slider to choose <var>j</var>, using the paragraph and width above. The table lists every place the last line could start, with the cost of that line and the best cost for everything before it.</p>
+    <div class="panel">
+      <label class="field"><span class="lab" id="j-lab">Setting the first words</span><input type="range" id="jpos" min="1" max="2" value="1" aria-labelledby="j-lab"></label>
+      <div class="tablewrap"><table id="cand"></table></div>
+      <p class="status" id="j-status" role="status" aria-live="polite"></p>
+    </div>
+    <details>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-lines"></div>
+    </details>
+    <p>This is also a shortest-path problem in disguise. Picture a node for each gap between words, and an arrow from gap <var>i</var> to gap <var>j</var> for every line that could hold words <var>i</var> to <var>j&minus;1</var>, labelled with its cost. The best setting is the cheapest route from the start to the end, found by the same kind of reasoning as the shortest-path searches on <a href="../one-loop-many-searches/">One loop, many searches</a>.</p>
+  </section>
+
+  <section aria-labelledby="h-real">
+    <h2 id="h-real">What the real thing adds</h2>
+    <p>This page uses the idea in a stripped-down form. The real algorithm is described in the Knuth&ndash;Plass paper, &ldquo;Breaking Paragraphs into Lines&rdquo;, in <em>Software: Practice and Experience</em>, 1981.</p>
+    <dl class="lines">
+      <div><dt>Stretchy gaps</dt><dd>Each space has a natural width and amounts it may stretch or shrink. A line&rsquo;s cost depends on how far its gaps must go from natural, not on a count of characters.</dd></div>
+      <div><dt>Penalties and hyphens</dt><dd>Some places are allowed breaks at a cost: after a hyphen, or inside a word if hyphenation is allowed. Others are discouraged, such as leaving a single word alone on the last line.</dd></div>
+      <div><dt>Looking only at sensible breaks</dt><dd>It keeps only the break points that can still lead to an acceptable line, so the work stays manageable for a whole page of text.</dd></div>
+      <div><dt>Paragraph, not page</dt><dd>It breaks one paragraph at a time. Breaking paragraphs across pages is a separate problem with its own rules.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-parts">
+    <h2 id="h-parts">The parts you can swap</h2>
+    <div class="tablewrap">
+      <table style="min-width:520px">
+        <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
+        <tbody>
+          <tr><td>The cost of a line</td><td>Slack, squared, cubed</td><td>How much one bad line is worth against several mild ones. Try all three above.</td></tr>
+          <tr><td>The last line</td><td>Free, or costed like the others</td><td>Whether a short final line is acceptable.</td></tr>
+          <tr><td>The measure</td><td>Characters, or true widths of letters</td><td>How accurate the fit is.</td></tr>
+          <tr><td>The way of choosing</td><td>Greedy, or the best total</td><td>Greedy is simple and fast but short-sighted. The best total costs a little more work and never does worse on this measure.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>The Knuth&ndash;Plass paper</dt><dd>&ldquo;Breaking Paragraphs into Lines&rdquo;, by Donald Knuth and Michael Plass, from 1981. It is the source for what this page describes.</dd></div>
+      <div><dt>Hyphenation by pattern</dt><dd>TeX decides where words may be hyphenated using a compact set of patterns, from Frank Liang&rsquo;s 1983 thesis.</dd></div>
+      <div><dt>Browser support</dt><dd>The CSS property <code>text-wrap: pretty</code> asks the browser to avoid ugly line endings, such as a very short last line. Support differs between browsers, so check a current compatibility table before relying on it.</dd></div>
+      <div><dt>Shortest paths</dt><dd>Seen as a graph of break points, the problem is a shortest path. <a href="../one-loop-many-searches/">One loop, many searches</a> covers the search side of that.</dd></div>
+      <div><dt>Viterbi decoding</dt><dd>The same idea, remembering the best way to reach each state, used for finding the most likely sequence of hidden states.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>Greedy line breaking fills each line and never looks back, so one choice can force a bad line later.</li>
+      <li>Give each line a cost from its slack, and the best setting is the one with the smallest total.</li>
+      <li>The cheapest way to set the first <var>j</var> words depends only on cheaper answers for fewer words, so a table of small answers solves it.</li>
+      <li>Remembering which choice won at each step lets you walk back and read off the lines.</li>
+      <li>The real algorithm adds stretchable gaps, hyphenation and penalties on top of the same plan.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
+
+  /* ---------- the algorithms (displayed and run as written) ---------- */
+  const widthOf = (words, i, j) => {
+    // characters needed for words i to j-1 with one space between them
+    let w = j - i - 1;
+    for (let k = i; k < j; k++) w += words[k].length;
+    return w;
+  };
+
+  const greedyBreaks = (words, W) => {
+    const lines = [];
+    let i = 0;
+    while (i < words.length) {
+      let j = i + 1;
+      while (j < words.length && widthOf(words, i, j + 1) <= W) j++;  // take whatever fits
+      lines.push([i, j]);
+      i = j;
+    }
+    return lines;
+  };
+
+  const lineCost = (words, i, j, W, power) => {
+    const slack = Math.max(0, W - widthOf(words, i, j));
+    return j === words.length ? 0 : slack ** power;   // the last line may be short
+  };
+
+  const optimalBreaks = (words, W, power) => {
+    const n = words.length;
+    const best = new Array(n + 1).fill(Infinity), from = new Array(n + 1).fill(0);
+    best[0] = 0;                                       // setting no words costs nothing
+    for (let j = 1; j <= n; j++) {
+      for (let i = j - 1; i >= 0; i--) {               // the last line holds words i to j-1
+        if (i < j - 1 && widthOf(words, i, j) > W) break;  // no longer fits
+        const total = best[i] + lineCost(words, i, j, W, power);
+        if (total < best[j]) { best[j] = total; from[j] = i; }
+      }
+    }
+    const lines = [];
+    for (let j = n; j > 0; j = from[j]) lines.unshift([from[j], j]);  // walk back
+    return { lines, best, from };
+  };
+
+  /* ---------- helpers that are not part of the idea ---------- */
+  const CAP = 400;
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|else|new|null|true|false|while|break)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  [['widthOf', widthOf, 'how wide a line is'], ['greedyBreaks', greedyBreaks, 'fill each line'], ['lineCost', lineCost, 'score one line'], ['optimalBreaks', optimalBreaks, 'the cheapest breaks overall']].forEach(([name, fn, tag]) => {
+    const d = el('div', 'fn');
+    d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+    d.appendChild(codeBlock('const ' + name + ' = ' + dedent(fn.toString())));
+    $('code-lines').appendChild(d);
+  });
+
+  let W = 26, show = 'ragged', power = 2, words = [];
+  const SHOW = { ragged: { name: 'Ragged' }, justified: { name: 'Justified' } };
+  const POWERS = { 1: { name: 'Slack' }, 2: { name: 'Slack squared' }, 3: { name: 'Slack cubed' } };
+  const costOf = (lines) => lines.reduce((s, [i, j]) => s + lineCost(words, i, j, W, power), 0);
+  const slackOf = (i, j) => Math.max(0, W - widthOf(words, i, j));
+
+  function drawPage(box, lines) {
+    box.textContent = '';
+    const inner = el('div', 'inner'); inner.style.width = W + 'ch';
+    lines.forEach(([i, j], k) => {
+      const last = j === words.length, slack = slackOf(i, j);
+      const row = el('div', 'ln2' + (show === 'justified' && !last ? ' fill' : ' ragged') + (!last && slack <= 2 ? ' tightl' : '') + (!last && slack > 6 ? ' loosel' : ''));
+      if (show === 'justified' && !last) row.style.width = W + 'ch';
+      words.slice(i, j).forEach((w, x) => {
+        if (show !== 'justified' || last) { row.appendChild(el('span', null, w + (x < j - i - 1 ? ' ' : ''))); }
+        else row.appendChild(el('span', null, w));
+      });
+      row.setAttribute('aria-label', 'Line ' + (k + 1) + ', slack ' + slack);
+      inner.appendChild(row);
+    });
+    box.appendChild(inner);
+  }
+  function readout(id, lines) {
+    const slacks = lines.slice(0, -1).map(([i, j]) => slackOf(i, j));
+    const rows = [['Lines', lines.length], ['Total cost', costOf(lines)], ['Loosest line', slacks.length ? Math.max(...slacks) : 0]];
+    $(id).textContent = '';
+    rows.forEach(([k, v]) => { const d = el('div'); d.append(el('span', 'k', k), el('span', 'v', String(v))); $(id).appendChild(d); });
+  }
+  function draw() {
+    words = $('para').value.split(/\s+/).filter(Boolean).slice(0, CAP);
+    $('w-lab').textContent = 'Line width: ' + W + ' characters';
+    if (!words.length) { ['pg-g', 'pg-o', 'ro-g', 'ro-o'].forEach((id) => { $(id).textContent = ''; }); $('w-status').textContent = 'Type a paragraph.'; $('cand').textContent = ''; return; }
+    const g = greedyBreaks(words, W), o = optimalBreaks(words, W, power);
+    drawPage($('pg-g'), g); drawPage($('pg-o'), o.lines);
+    readout('ro-g', g); readout('ro-o', o.lines);
+    const cg = costOf(g), co = costOf(o.lines), same = JSON.stringify(g) === JSON.stringify(o.lines);
+    $('w-status').textContent = same ? 'At this width both methods choose the same breaks. Try another width.'
+      : 'The two settings differ. The best total cost is ' + co + ' against ' + cg + ' for greedy' + (o.lines.length !== g.length ? ', and it uses ' + plural(o.lines.length, 'line', 'lines') + ' against ' + g.length : '') + '.';
+    if (cg < co) $('w-status').textContent += ' (Greedy has the lower total here, which should not happen.)';
+    // the candidates explorer
+    const jm = $('jpos'); jm.max = words.length; if (+jm.value > words.length) jm.value = words.length;
+    drawCand(o);
+  }
+  function drawCand(o) {
+    const j = +$('jpos').value, tbl = $('cand');
+    $('j-lab').textContent = 'Setting the first ' + j + ' of ' + words.length + ' words';
+    tbl.textContent = '';
+    tbl.innerHTML = '<thead><tr><th>Last line holds</th><th class="num">Slack</th><th class="num">Its cost</th><th class="num">Best before it</th><th class="num">Total</th></tr></thead>';
+    const body = el('tbody'); let count = 0;
+    for (let i = j - 1; i >= 0; i--) {
+      if (i < j - 1 && widthOf(words, i, j) > W) break;
+      count++;
+      const c = lineCost(words, i, j, W, power), tot = o.best[i] + c;
+      const tr = el('tr', i === o.from[j] ? 'pick' : '');
+      const td = el('td', 'mono', words.slice(i, j).join(' ')); if (i === o.from[j]) td.appendChild(el('span', 'tag', 'cheapest'));
+      tr.append(td, el('td', 'num', String(slackOf(i, j))), el('td', 'num', String(c)), el('td', 'num', String(o.best[i])), el('td', 'num', String(tot)));
+      body.appendChild(tr);
+    }
+    tbl.appendChild(body);
+    $('j-status').textContent = 'There ' + (count === 1 ? 'is one place' : 'are ' + count + ' places') + ' the last line of these ' + j + ' words could start. The cheapest total is ' + o.best[j] + ', so best[' + j + '] = ' + o.best[j] + ', and that line starts at word ' + (o.from[j] + 1) + '.';
+  }
+  function seg(id, name, registry, current, onPick) {
+    const e = $(id);
+    Object.entries(registry).forEach(([key, v]) => e.insertAdjacentHTML('beforeend', '<input type="radio" name="' + name + '" id="' + name + '-' + key + '" value="' + key + '"' + (key === String(current) ? ' checked' : '') + '><label for="' + name + '-' + key + '">' + esc(v.name) + '</label>'));
+    e.addEventListener('change', (ev) => onPick(ev.target.value));
+  }
+  seg('seg-show', 'show', SHOW, show, (v) => { show = v; draw(); });
+  seg('seg-pow', 'pow', POWERS, power, (v) => { power = +v; draw(); });
+  $('width').addEventListener('input', () => { W = +$('width').value; draw(); });
+  $('para').addEventListener('input', draw);
+  $('jpos').addEventListener('input', draw);
+  $('para').value = 'The committee met on Tuesday to discuss the new library hours, the plan for the garden, and several small repairs that had been waiting since the spring. Nobody objected to the earlier opening time, though a few members worried about the cost of heating the reading room on cold mornings.';
+  draw();
+})();
+</script>
+</body>
+</html>
