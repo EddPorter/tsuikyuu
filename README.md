@@ -19,6 +19,7 @@ Each explainer is a single standalone HTML file in its own folder, so its addres
 | [Read it backwards](boyer-moore/) | Boyer–Moore–Horspool string search: compare the pattern from its last letter, skip ahead on a mismatch, and measure how much of the text is never looked at. Uses made-up text only. |
 | [The whole paragraph](line-breaking/) | Optimal line breaking, the idea behind Knuth–Plass: greedy versus best-total breaks, and the dynamic-programming table that chooses them. Uses made-up text only. |
 | [The most likely story](viterbi/) | The Viterbi algorithm on a small hidden-weather puzzle: the grid of best-so-far scores, the links followed back to recover the story, and a check against scoring every story. Uses made-up numbers only. |
+| [How much to believe](kalman-filter/) | The Kalman filter: combining a prediction and a noisy reading by how certain each is, the predict and update loop on a noisy track, mis-tuned noise settings, and a hidden speed learned from positions alone. Uses made-up numbers only. |
 
 More explainers will be added as new folders, and listed in [`index.html`](index.html).
 
