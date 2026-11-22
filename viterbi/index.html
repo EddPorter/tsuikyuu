@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The Most Likely Story</title>
+<meta name="description" content="An interactive explainer of the Viterbi algorithm: finding the most likely sequence of hidden states behind a series of noisy clues, by remembering the best way to reach each state at each step.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: one reading column that builds the idea in stages, each ending in a small workbench you can poke. */
+:root {
+  --bg: #eceff2; --surface: #fbfcfd; --cell: #f0f3f5; --ink: #16212b; --muted: #55646f; --line: #cdd5dc;
+  --accent: #2b2bd6; --accent-soft: #e3e3fb; --on-accent: #ffffff;
+  --rain: #2a5ea8; --rain-bg: #dbe8f8; --sun: #946200; --sun-bg: #fbecc4;
+  --code-bg: #15222c; --code-ink: #d8e2ea; --code-cm: #7f93a3; --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+    --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+    --rain: #8fb8f0; --rain-bg: #1c3250; --sun: #f0c25a; --sun-bg: #46380f; --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+  --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+  --rain: #8fb8f0; --rain-bg: #1c3250; --sun: #f0c25a; --sun-bg: #46380f; --code-bg: #0b1117;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+select { font: inherit; font-size: 14px; padding: 6px 8px; background: var(--cell); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; }
+input[type="range"] { accent-color: var(--accent); width: 220px; max-width: 100%; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.status { min-height: 2.4em; font-weight: 500; }
+
+/* the days */
+.days { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.day { display: flex; flex-direction: column; gap: 6px; min-width: 88px; }
+.day .d { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.chips { display: flex; gap: 8px; overflow-x: auto; }
+.chip { min-width: 88px; padding: 6px 8px; border-radius: 6px; text-align: center; font-size: 14px; font-weight: 600; border: 1px solid var(--line); }
+.chip.R { background: var(--rain-bg); color: var(--rain); border-color: var(--rain); }
+.chip.S { background: var(--sun-bg); color: var(--sun); border-color: var(--sun); }
+.chip.hdr { background: none; border: 0; color: var(--muted); font-weight: 500; text-align: left; min-width: 0; padding-left: 0; }
+.storyrow { display: flex; flex-direction: column; gap: 4px; }
+.storyrow .who { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+/* the grid */
+.gridwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 6px; }
+table.tr { border-collapse: collapse; font-family: var(--font-mono); font-size: 12.5px; width: auto; }
+table.tr th, table.tr td { border: 1px solid var(--line); padding: 6px 8px; min-width: 88px; text-align: center; }
+table.tr th { background: var(--cell); font-weight: 700; color: var(--ink); font-size: 12px; text-transform: none; letter-spacing: 0; }
+table.tr td { cursor: pointer; }
+table.tr td.blank { color: transparent; cursor: default; background: var(--cell); }
+table.tr td.path { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+table.tr td.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+table.tr td small { display: block; font-size: 10.5px; opacity: 0.8; font-family: var(--font-body); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table.plain { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px; }
+table.plain th, table.plain td { text-align: left; padding: 6px 12px; vertical-align: middle; border-bottom: 1px solid var(--line); }
+table.plain th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+table.plain tr:last-child td { border-bottom: 0; }
+table.plain td.num, table.plain th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+table.plain tr.pick td { background: var(--accent-soft); font-weight: 600; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+@media (max-width: 920px) { .two { grid-template-columns: minmax(0, 1fr); } dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>The most likely story</h1>
+    <p class="lead">Sometimes you cannot see what is happening, only clues that depend on it. From a week of clues you want the single most likely story of what really went on. There are far too many stories to try them all, but one idea, the Viterbi algorithm, finds the best by remembering only the best way to reach each possibility at each step. This page builds it from a small weather puzzle.</p>
+  </header>
+
+  <section aria-labelledby="h-puzzle">
+    <h2 id="h-puzzle">The puzzle</h2>
+    <p>A friend lives somewhere you cannot see the sky from. You never learn the weather. You only hear what they did each day: they <em>walked</em>, <em>shopped</em> or <em>cleaned</em>. The weather, though, affects what they do. It is probably sunny on a walking day and rainy on a cleaning day. Weather also tends to carry on, so a rainy day is likely to be followed by another.</p>
+    <p>So the facts, with every number made up for this page, are these:</p>
+    <dl class="lines">
+      <div><dt>Where it starts</dt><dd>The first day is rainy with chance 0.6 and sunny with chance 0.4.</dd></div>
+      <div><dt>How weather carries on</dt><dd>Each day, rain stays rain with some chance and sun stays sun with some chance. You can change both below.</dd></div>
+      <div><dt>What the weather makes your friend do</dt><dd>On a rainy day: walk 0.1, shop 0.4, clean 0.5. On a sunny day: walk 0.6, shop 0.3, clean 0.1.</dd></div>
+    </dl>
+    <p>A model like this, with a hidden chain of states and visible clues, is called a <strong>hidden Markov model</strong>. Given the clues for a run of days, which weather sequence is most likely?</p>
+  </section>
+
+  <section aria-labelledby="h-try">
+    <h2 id="h-try">Try it</h2>
+    <p>Set what your friend did on each day. The page finds the most likely weather for the whole run, and compares it with a simpler idea: guess each day on its own from that day&rsquo;s clue alone, ignoring the other days.</p>
+    <div class="panel">
+      <div class="row" id="presets" role="group" aria-label="Examples"></div>
+      <div class="days" id="days" aria-label="What your friend did each day"></div>
+      <div class="row">
+        <button class="btn small" type="button" id="add">Add a day</button>
+        <button class="btn small" type="button" id="drop">Remove the last day</button>
+      </div>
+      <div class="sliders">
+        <label class="field"><span class="lab" id="lab-r">Rain carries on: <span id="v-r"></span></span><input type="range" id="stay-r" min="0.1" max="0.95" step="0.05" aria-labelledby="lab-r"></label>
+        <label class="field"><span class="lab" id="lab-s">Sun carries on: <span id="v-s"></span></span><input type="range" id="stay-s" min="0.1" max="0.95" step="0.05" aria-labelledby="lab-s"></label>
+      </div>
+      <div class="storyrow"><span class="who">Most likely story (Viterbi)</span><div class="chips" id="story-v"></div></div>
+      <div class="storyrow"><span class="who">Each day on its own</span><div class="chips" id="story-g"></div></div>
+      <p class="status" id="story-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>Try the &ldquo;One odd day&rdquo; example. A single cleaning day sits between walking days. On its own, a cleaning day looks rainy. But if sun carries on strongly, a week of sun with one odd day is a more likely story than two sudden changes of weather. Looking at each day alone cannot see that. It also scores each day without asking whether the whole sequence hangs together.</p>
+  </section>
+
+  <section aria-labelledby="h-many">
+    <h2 id="h-many">Too many stories</h2>
+    <p>With two kinds of weather and <var>n</var> days there are 2<sup><var>n</var></sup> possible stories. Seven days gives 128. A real problem might have fifty states and a hundred steps. We need to avoid scoring every story.</p>
+    <p>Here is the observation that does it. Suppose the best story for the first <var>t</var> days ends with rain on day <var>t</var>. Then the part of it that covers the first <var>t&minus;1</var> days must be the best story ending in whatever weather came before. If some better way to get to that earlier day existed, we could swap it in and improve the whole. So for each day and each weather we only need to remember <em>one thing</em>: the best story that ends there. Everything else can be forgotten.</p>
+  </section>
+
+  <section aria-labelledby="h-grid">
+    <h2 id="h-grid">The grid</h2>
+    <p>Draw a grid with a column for each day and a row for each kind of weather. Each cell holds the probability of the best story that ends in that weather on that day, and which weather the day before that story came from.</p>
+    <dl class="lines">
+      <div><dt>The first column</dt><dd>The chance of starting in that weather, times the chance of seeing that day&rsquo;s clue from it.</dd></div>
+      <div><dt>Any later cell</dt><dd>For each weather the day before, take its cell, multiply by the chance of moving from it to this weather, and keep the best. Remember which one won. Then multiply by the chance of this day&rsquo;s clue.</dd></div>
+      <div><dt>The answer</dt><dd>The largest cell in the last column. Follow the remembered choices back, column by column, to read off the whole story.</dd></div>
+    </dl>
+    <p>Move the slider to fill the grid a column at a time. Click a cell to see the sums behind it.</p>
+    <div class="panel">
+      <label class="field"><span class="lab" id="lab-t">Columns filled</span><input type="range" id="cols" min="1" max="7" value="1" aria-labelledby="lab-t"></label>
+      <div class="gridwrap"><table class="tr" id="trellis"></table></div>
+      <div class="tablewrap"><table class="plain" id="detail"></table></div>
+      <p class="status" id="grid-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>A small note on numbers. Multiplying many chances makes very small numbers, and a computer can run out of precision. Real code adds logarithms of the chances instead of multiplying them, which gives the same ordering. This page multiplies so that you can follow the sums.</p>
+    <details>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-v"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-check">
+    <h2 id="h-check">Checking it</h2>
+    <p>It is fair to ask whether forgetting everything else loses the best answer. For short runs we can find out by scoring every story. The page does this for each run you build, up to twelve days.</p>
+    <div class="panel">
+      <p class="status" id="check-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>The grid has one cell per weather per day, and each cell looks at every weather the day before. So the work grows with the number of days times the square of the number of weathers, where trying every story grows by multiplying by the number of weathers for each extra day.</p>
+  </section>
+
+  <section aria-labelledby="h-parts">
+    <h2 id="h-parts">The parts you can swap</h2>
+    <div class="tablewrap">
+      <table class="plain" style="min-width:520px">
+        <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
+        <tbody>
+          <tr><td>The hidden states</td><td>Weather, a word&rsquo;s part of speech, a road segment</td><td>What the story is about.</td></tr>
+          <tr><td>The clues</td><td>What your friend did, a sound, a GPS reading</td><td>What is observed at each step.</td></tr>
+          <tr><td>How states follow each other</td><td>A table of chances</td><td>How strongly the story resists sudden changes. Try the sliders.</td></tr>
+          <tr><td>How a state produces a clue</td><td>A table of chances</td><td>How much each clue tells you.</td></tr>
+          <tr><td>Best or total</td><td>Keep the best, or add all the ways</td><td>Keeping the best gives the single most likely story. Adding all the ways gives the chance of the clues themselves, which is the forward algorithm.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where it is used, and where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Uses</dt><dd>Decoding error-correcting codes of a kind called convolutional codes was its original setting. It is also widely used in speech recognition, tagging words with their parts of speech, and matching a noisy GPS trail to the roads that were probably driven.</dd></div>
+      <div><dt>Forward&ndash;backward and Baum&ndash;Welch</dt><dd>The related algorithms for the chance of the clues, and for learning the tables of chances from examples when you do not know them.</dd></div>
+      <div><dt>Beam search</dt><dd>When there are too many states even for the grid, keep only the best few in each column. It is faster and no longer guaranteed to find the best.</dd></div>
+      <div><dt>The same shape elsewhere</dt><dd>The grid of best-so-far answers is the idea on <a href="../what-changed/">What changed?</a>, and finding the best route through choices is the shortest-path view of <a href="../line-breaking/">The whole paragraph</a>.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>A hidden chain of states produces clues. You see the clues and want the most likely chain.</li>
+      <li>The number of stories doubles, or worse, with each extra step, so scoring them all is out.</li>
+      <li>The best story ending in a state on a given day is built from the best story ending in some state the day before. Remember only that.</li>
+      <li>A grid with one cell per state per step holds those best scores, and remembered back-links recover the whole story.</li>
+      <li>Looking at each step alone misses how the steps fit together.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  /* ---------- the algorithm (displayed and run as written) ---------- */
+  const viterbi = (obs, model) => {
+    const { states, start, trans, emit } = model;
+    const best = [], from = [];
+    best[0] = {}; from[0] = {};
+    for (const s of states) best[0][s] = start[s] * emit[s][obs[0]];
+    for (let t = 1; t < obs.length; t++) {
+      best[t] = {}; from[t] = {};
+      for (const s of states) {
+        let top = -1, via = null;
+        for (const p of states) {                    // which weather the day before?
+          const score = best[t - 1][p] * trans[p][s];
+          if (score > top) { top = score; via = p; }
+        }
+        best[t][s] = top * emit[s][obs[t]];          // then the clue for today
+        from[t][s] = via;
+      }
+    }
+    const end = obs.length - 1;
+    let last = states[0];
+    for (const s of states) if (best[end][s] > best[end][last]) last = s;
+    const path = [last];
+    for (let t = end; t > 0; t--) path.unshift(from[t][path[0]]);   // follow the links back
+    return { best, from, path, probability: best[end][last] };
+  };
+
+  const dayByDay = (obs, model) => {
+    // each day on its own: whichever weather best explains that day's clue
+    return obs.map((o, t) => model.states.reduce((a, b) => {
+      const pa = model.emit[a][o] * (t ? 1 : model.start[a]), pb = model.emit[b][o] * (t ? 1 : model.start[b]);
+      return pb > pa ? b : a;
+    }));
+  };
+
+  const probabilityOf = (path, obs, model) => {
+    // how likely one particular story is, from the first day to the last
+    let p = model.start[path[0]] * model.emit[path[0]][obs[0]];
+    for (let t = 1; t < obs.length; t++) p *= model.trans[path[t - 1]][path[t]] * model.emit[path[t]][obs[t]];
+    return p;
+  };
+
+  /* ---------- helpers that are not part of the idea ---------- */
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|else|new|null|true|false|while)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  [['viterbi', viterbi, 'fill the grid, then follow the links back'], ['dayByDay', dayByDay, 'the simpler idea, for comparison'], ['probabilityOf', probabilityOf, 'score one whole story']].forEach(([name, fn, tag]) => {
+    const d = el('div', 'fn');
+    d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+    d.appendChild(codeBlock('const ' + name + ' = ' + dedent(fn.toString())));
+    $('code-v').appendChild(d);
+  });
+
+  const NAME = { R: 'Rain', S: 'Sun' }, ACT = { walk: 'walked', shop: 'shopped', clean: 'cleaned' };
+  const fmt = (p) => (p === 0 ? '0' : p >= 0.001 ? p.toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : p.toExponential(2));
+  const model = (stayR, stayS) => ({
+    states: ['R', 'S'],
+    start: { R: 0.6, S: 0.4 },
+    trans: { R: { R: stayR, S: 1 - stayR }, S: { R: 1 - stayS, S: stayS } },
+    emit: { R: { walk: 0.1, shop: 0.4, clean: 0.5 }, S: { walk: 0.6, shop: 0.3, clean: 0.1 } }
+  });
+
+  let days = ['walk', 'shop', 'clean', 'clean', 'walk', 'walk', 'shop'], stayR = 0.7, stayS = 0.6, sel = null;
+  const PRESETS = [
+    ['A varied week', ['walk', 'shop', 'clean', 'clean', 'walk', 'walk', 'shop'], 0.7, 0.6],
+    ['One odd day', ['walk', 'walk', 'clean', 'walk', 'walk'], 0.7, 0.9],
+    ['Sudden changes', ['walk', 'clean', 'walk', 'clean', 'walk'], 0.3, 0.3]
+  ];
+
+  function drawDays() {
+    const box = $('days'); box.textContent = '';
+    days.forEach((a, i) => {
+      const d = el('div', 'day'); d.appendChild(el('span', 'd', 'Day ' + (i + 1)));
+      const s = el('select'); s.setAttribute('aria-label', 'Day ' + (i + 1));
+      Object.entries(ACT).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; if (k === a) o.selected = true; s.appendChild(o); });
+      s.addEventListener('change', () => { days[i] = s.value; redraw(); });
+      d.appendChild(s); box.appendChild(d);
+    });
+    $('add').disabled = days.length >= 12; $('drop').disabled = days.length <= 2;
+  }
+  function chips(boxId, path, label) {
+    const box = $(boxId); box.textContent = '';
+    path.forEach((s) => box.appendChild(el('div', 'chip ' + s, NAME[s])));
+    box.setAttribute('aria-label', label + ': ' + path.map((s) => NAME[s]).join(', '));
+  }
+  function* everyStory(n, states) {
+    const at = [];
+    const go = function* (i) { if (i === n) { yield at.slice(); return; } for (const s of states) { at.push(s); yield* go(i + 1); at.pop(); } };
+    yield* go(0);
+  }
+  function redraw() {
+    const m = model(stayR, stayS);
+    $('v-r').textContent = stayR.toFixed(2); $('v-s').textContent = stayS.toFixed(2);
+    const v = viterbi(days, m), g = dayByDay(days, m), pg = probabilityOf(g, days, m);
+    chips('story-v', v.path, 'Most likely story'); chips('story-g', g, 'Each day on its own');
+    const same = v.path.join('') === g.join('');
+    $('story-status').textContent = same
+      ? 'Both methods give the same weather, with chance ' + fmt(v.probability) + '. Try the “One odd day” example.'
+      : 'The most likely whole story has chance ' + fmt(v.probability) + '. Guessing each day alone gives a story with chance ' + fmt(pg) + '. The best story is ' + (pg > 0 ? 'about ' + (v.probability / pg).toFixed(1) + ' times as likely.' : 'possible, and the other is impossible under this model.');
+    if (!same && pg > v.probability * 1.000001) $('story-status').textContent += ' (That should not happen.)';
+    // the grid
+    const cols = $('cols'); cols.max = days.length; if (+cols.value > days.length) cols.value = days.length;
+    drawGrid(v, m);
+    // the check
+    if (days.length <= 12) {
+      let top = 0, count = 0, bestPath = null;
+      for (const st of everyStory(days.length, m.states)) { count++; const p = probabilityOf(st, days, m); if (p > top) { top = p; bestPath = st; } }
+      const ok = Math.abs(top - v.probability) <= 1e-12 * Math.max(top, 1e-300);
+      $('check-status').textContent = 'Scoring all ' + count.toLocaleString('en-GB') + ' possible stories finds a best chance of ' + fmt(top) + '. The grid found ' + fmt(v.probability) + '. ' + (ok ? 'They agree, and the grid needed only ' + (days.length * 2) + ' cells.' : 'They disagree, which should not happen.');
+    } else $('check-status').textContent = 'Too many days to score every story. Use twelve or fewer to see the check.';
+  }
+  function drawGrid(v, m) {
+    const n = +$('cols').value, tbl = $('trellis'); tbl.textContent = '';
+    const head = el('tr'); head.appendChild(el('th'));
+    days.forEach((a, t) => head.appendChild(el('th', null, 'Day ' + (t + 1) + ': ' + ACT[a])));
+    const th = el('thead'); th.appendChild(head); tbl.appendChild(th);
+    const body = el('tbody'), done = n === days.length;
+    if (!sel || sel.t >= n) sel = { t: n - 1, s: v.path[n - 1] };
+    m.states.forEach((s) => {
+      const tr = el('tr'); tr.appendChild(el('th', null, NAME[s]));
+      days.forEach((a, t) => {
+        const shown = t < n;
+        const td = el('td', shown ? (done && v.path[t] === s ? 'path' : '') : 'blank');
+        td.textContent = shown ? fmt(v.best[t][s]) : '·';
+        if (shown && t > 0) td.appendChild(el('small', null, 'from ' + NAME[v.from[t][s]].toLowerCase()));
+        if (shown && sel && sel.t === t && sel.s === s) td.classList.add('sel');
+        if (shown) { td.tabIndex = 0; td.addEventListener('click', () => { sel = { t, s }; redraw(); }); td.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sel = { t, s }; redraw(); } }); }
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+    tbl.appendChild(body);
+    // detail of the selected cell
+    const d = $('detail'); d.textContent = '';
+    const { t, s } = sel, o = days[t];
+    if (t === 0) {
+      d.innerHTML = '<thead><tr><th>Day 1, ' + NAME[s].toLowerCase() + '</th><th class="num">Chance</th></tr></thead>';
+      const b = el('tbody');
+      [['Starting in ' + NAME[s].toLowerCase(), m.start[s]], ['Seeing “' + ACT[o] + '” from ' + NAME[s].toLowerCase(), m.emit[s][o]], ['Product', v.best[0][s]]].forEach(([a, p]) => { const r = el('tr'); r.append(el('td', null, a), el('td', 'num', fmt(p))); b.appendChild(r); });
+      d.appendChild(b);
+    } else {
+      d.innerHTML = '<thead><tr><th>Day ' + (t + 1) + ', ' + NAME[s].toLowerCase() + ': the day before was</th><th class="num">Best before</th><th class="num">Moving to ' + NAME[s].toLowerCase() + '</th><th class="num">Product</th></tr></thead>';
+      const b = el('tbody');
+      m.states.forEach((p) => { const r = el('tr', p === v.from[t][s] ? 'pick' : ''); r.append(el('td', null, NAME[p] + (p === v.from[t][s] ? ' (best)' : '')), el('td', 'num', fmt(v.best[t - 1][p])), el('td', 'num', fmt(m.trans[p][s])), el('td', 'num', fmt(v.best[t - 1][p] * m.trans[p][s]))); b.appendChild(r); });
+      const r = el('tr'); r.append(el('td', null, 'Best product, times the chance of “' + ACT[o] + '” from ' + NAME[s].toLowerCase() + ' (' + fmt(m.emit[s][o]) + ')'), el('td'), el('td'), el('td', 'num', fmt(v.best[t][s])));
+      b.appendChild(r); d.appendChild(b);
+    }
+    $('grid-status').textContent = done
+      ? 'The grid is full. The largest cell in the last column is ' + fmt(v.probability) + ', for ' + NAME[v.path[v.path.length - 1]].toLowerCase() + '. Following the “from” notes back from there gives the highlighted path: ' + v.path.map((x) => NAME[x].toLowerCase()).join(', ') + '.'
+      : 'Columns 1 to ' + n + ' are filled. Move the slider to fill more, and click any cell to see its sums.';
+  }
+
+  /* ---------- wiring ---------- */
+  PRESETS.forEach(([label, ds, r, s]) => {
+    const b = el('button', 'btn small', label); b.type = 'button';
+    b.addEventListener('click', () => { days = ds.slice(); stayR = r; stayS = s; $('stay-r').value = r; $('stay-s').value = s; sel = null; $('cols').value = days.length; drawDays(); redraw(); });
+    $('presets').appendChild(b);
+  });
+  $('add').addEventListener('click', () => { days.push('walk'); sel = null; drawDays(); redraw(); });
+  $('drop').addEventListener('click', () => { days.pop(); sel = null; drawDays(); redraw(); });
+  $('stay-r').addEventListener('input', () => { stayR = +$('stay-r').value; redraw(); });
+  $('stay-s').addEventListener('input', () => { stayS = +$('stay-s').value; redraw(); });
+  $('cols').addEventListener('input', () => { sel = null; redraw(); });
+  $('stay-r').value = stayR; $('stay-s').value = stayS;
+  drawDays(); $('cols').max = days.length; $('cols').value = 3; redraw();
+})();
+</script>
+</body>
+</html>
