@@ -196,7 +196,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
       </div>
       <p class="note">Similarity is the shared shingles divided by all the different shingles in either message. It is called the Jaccard similarity: 100% for the same shingles, 0% for none in common.</p>
     </div>
-    <details open>
+    <details>
       <summary>The code (it is what this page runs)</summary>
       <div class="stack" id="code-shingles"></div>
     </details>
@@ -232,7 +232,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
       </div>
       <p class="note" id="sig-note"></p>
     </div>
-    <details open>
+    <details>
       <summary>The code (it is what this page runs)</summary>
       <div class="stack" id="code-minhash"></div>
     </details>
@@ -248,7 +248,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
       <div id="lsh-chart"></div>
       <p class="status" id="lsh-status" role="status" aria-live="polite"></p>
     </div>
-    <details open>
+    <details>
       <summary>The code (it is what this page runs)</summary>
       <div class="stack" id="code-lsh"></div>
     </details>
@@ -286,7 +286,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
       </div>
       <p class="status" id="sim-status" role="status" aria-live="polite"></p>
     </div>
-    <details open>
+    <details>
       <summary>The code (it is what this page runs)</summary>
       <div class="stack" id="code-simhash"></div>
     </details>
@@ -297,8 +297,8 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
     <h2 id="h-others">Other fuzzy fingerprints</h2>
     <dl class="lines">
       <div><dt>ssdeep</dt><dd>Context-triggered piecewise hashing. A rolling hash decides where to cut a file into chunks, hashes each chunk, and the digest is a string of small pieces, so inserting or deleting text only changes the chunks nearby. It compares files, such as sets of related malware, and not only text.</dd></div>
-      <div><dt>TLSH and Nilsimsa</dt><dd>Digests built from counts of small patterns of bytes, designed so that the distance between two digests reflects how similar the inputs are. Nilsimsa was designed with spam detection in mind. I am recalling both from memory, so check them before relying on this.</dd></div>
-      <div><dt>Pyzor, Razor and DCC</dt><dd>Open anti-spam systems that share fingerprints of messages between many mail servers, so that one server's sighting helps all the others. I recall that they publish how they work, but check each before relying on that.</dd></div>
+      <div><dt>TLSH and Nilsimsa</dt><dd>Digests designed so that the distance between two digests reflects how similar the inputs are. Nilsimsa slides a five-byte window along the input, counts the three-byte combinations it sees into 256 counters, and keeps the result as a 32-byte digest. It was proposed in 2001 for spotting spam.</dd></div>
+      <div><dt>Pyzor, Razor and DCC</dt><dd>Anti-spam systems in which mail servers share fingerprints of messages, not the messages themselves, so that one server's sighting helps all the others. DCC returns a count of how often a fuzzy checksum has been seen. Razor weighs each report by how far its sender is trusted. Pyzor counts digests that have been reported as spam or as not spam.</dd></div>
     </dl>
   </section>
 
@@ -317,7 +317,7 @@ ul.recap, ul.try { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-
     <p>Names to search for. They are pointers, not explanations.</p>
     <dl class="lines">
       <div><dt>Locality-sensitive hashing</dt><dd>The family of ideas this page used: hash so that similar things land together. Banding is one scheme of it.</dd></div>
-      <div><dt>Shingling and min-wise hashing</dt><dd>I believe these were introduced for finding near-duplicate web pages in the late 1990s, by Andrei Broder and colleagues. Check before citing it.</dd></div>
+      <div><dt>Shingling and min-wise hashing</dt><dd>Introduced by Andrei Broder and colleagues at AltaVista in the late 1990s to find near-duplicate web pages. The 1997 paper is &ldquo;On the resemblance and containment of documents&rdquo;.</dd></div>
       <div><dt>Charikar's SimHash</dt><dd>The bit-vote fingerprint above, with schemes for searching by small Hamming distance.</dd></div>
       <div><dt>Weighted MinHash and b-bit MinHash</dt><dd>Variants that count repeated shingles, or store fewer bits per position.</dd></div>
       <div><dt>Edit distance</dt><dd>A different idea of &ldquo;nearly the same&rdquo; that counts the changes needed to turn one text into another. It is more precise and much slower.</dd></div>

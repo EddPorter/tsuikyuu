@@ -82,6 +82,10 @@ dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
 /* panels and controls */
 .bench { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .stage, .side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.codebox { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.codebox > summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+.codebox > .side { padding: 0 12px 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); align-items: start; }
+.codebox details { grid-column: 1 / -1; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -719,7 +723,7 @@ footer { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
       '<button class="btn" type="button" data-a="finish">Finish</button>' +
       '<button class="btn" type="button" data-a="restart">Restart</button>' +
       '<label class="field"><span class="lab">Speed</span><input type="range" min="0" max="6" value="3" data-a="speed"></label>' +
-      '</div></div></div><div class="side" data-side></div></div>';
+      '</div></div></div><details class="codebox"><summary>The code that is running</summary><div class="side" data-side></div></details></div>';
     const q = (s) => root.querySelector(s);
     const rowsEl = q('[data-rows]'), statusEl = q('[data-status]'), side = q('[data-side]');
     let cfg, words, run, st, queue, idPre, cntPre, playing = false, acc = 0, lastT = 0;
