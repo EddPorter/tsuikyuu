@@ -96,6 +96,15 @@ tr:last-child td { border-bottom: 0; }
 td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 td.mono { font-family: var(--font-mono); white-space: pre; }
 tr.pick td { background: var(--accent-soft); font-weight: 600; }
+tr.cur td { background: var(--accent-soft); }
+table.small { min-width: 0; }
+.wordstrip { display: flex; flex-wrap: wrap; gap: 6px; }
+.wordstrip .w { display: inline-flex; flex-direction: column; align-items: center; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; font-family: var(--font-mono); font-size: 13px; background: var(--cell); color: var(--muted); }
+.wordstrip .w small { font-family: var(--font-body); font-size: 10px; }
+.wordstrip .w.in { background: var(--surface); color: var(--ink); border-color: var(--muted); }
+.wordstrip .w.cur { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; max-width: 65ch; }
+ol.steps { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 70ch; }
 .tag { font-family: var(--font-body); font-size: 11px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--accent); background: var(--surface); margin-left: 8px; white-space: nowrap; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
 .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--line); }
@@ -152,13 +161,30 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
 
   <section aria-labelledby="h-dp">
     <h2 id="h-dp">Choosing all the breaks together</h2>
-    <p>There are far too many ways to break a paragraph to try them all: each gap between words is a possible break or not, so a 100-word paragraph has an astronomical number of settings. But we can use a trick we have met before, on <a href="../fuzzy-finding/">Best match first</a> and <a href="../what-changed/">What changed?</a>: answer small questions first, remember the answers, and build up.</p>
-    <p>The small question is: <em>what is the cheapest way to set just the first <var>j</var> words?</em> Call the answer <code>best[j]</code>. To work it out, ask where the last line starts. If it starts at word <var>i</var>, then the cost is <code>best[i]</code>, the cheapest way to set everything before it, plus the cost of that one last line. Try every <var>i</var> for which the line fits, and take the cheapest. The answers for smaller <var>j</var> are already known, so each step needs only a short list of candidates. The answer for all the words is <code>best[n]</code>, and remembering which <var>i</var> won each time lets you walk back and read off the lines.</p>
-    <p>Drag the slider to choose <var>j</var>, using the paragraph and width above. The table lists every place the last line could start, with the cost of that line and the best cost for everything before it.</p>
+    <p>Greedy breaking goes wrong because it decides each line without asking what it leaves for the next. To do better we want the cheapest <em>total</em>. There are far too many ways to break a paragraph to try them all: each gap between words is a break or not, so a 100-word paragraph has an astronomical number of settings. But there is a shortcut, and it rests on one fact.</p>
+    <p class="callout"><strong>The cheapest way to set the first <var>j</var> words is the cheapest way to set some shorter run of words, plus one more line.</strong></p>
+    <p>Here is why. Take the cheapest setting of the first <var>j</var> words and look at its last line. Say it holds words <var>i</var>+1 to <var>j</var>. Everything before that line is a setting of the first <var>i</var> words, and it must be the cheapest one possible. If it were not, swapping in a cheaper one would make the whole setting cheaper, which contradicts it being the cheapest.</p>
+    <p>So we keep a list called <code>best</code>, where <code>best[j]</code> is the lowest cost of setting the first <var>j</var> words as complete lines. We fill it in from the start:</p>
+    <ol class="steps">
+      <li><code>best[0] = 0</code>. Setting no words costs nothing.</li>
+      <li>For each <var>j</var> in turn, from 1 up to the number of words, list every <em>last line</em> that could end at word <var>j</var>. That is words <var>i</var>+1 to <var>j</var> for each <var>i</var> that still fits on one line.</li>
+      <li>For each of those, work out <strong>total = best[<var>i</var>] + the cost of that last line</strong>. <code>best[<var>i</var>]</code> is already known, because <var>i</var> is smaller than <var>j</var>.</li>
+      <li>The smallest total is <code>best[<var>j</var>]</code>. Also remember which <var>i</var> gave it.</li>
+    </ol>
+    <p>When <code>best[n]</code> is done for all <var>n</var> words, that is the cheapest cost for the whole paragraph. To read off the lines, look at which <var>i</var> was remembered for <var>n</var>: the last line starts at word <var>i</var>+1. Then look at what was remembered for that <var>i</var> to find the line before it, and so on back to the start.</p>
+    <h3 style="margin-top:8px">A worked example</h3>
+    <p>This is a short example, small enough to see every number. It uses the cost chosen above. The tables show exactly the calculation in the steps. Move the first slider to change the line width. Move the second slider, or press &ldquo;Next word&rdquo;, to work out <code>best[<var>j</var>]</code> for one more word at a time.</p>
     <div class="panel">
-      <label class="field"><span class="lab" id="j-lab">Setting the first words</span><input type="range" id="jpos" min="1" max="2" value="1" aria-labelledby="j-lab"></label>
-      <div class="tablewrap"><table id="cand"></table></div>
-      <p class="status" id="j-status" role="status" aria-live="polite"></p>
+      <div class="row">
+        <label class="field"><span class="lab" id="x-wlab">Line width for this example: <span id="x-wv"></span></span><input type="range" id="x-w" min="14" max="30" value="20" aria-labelledby="x-wlab"></label>
+        <label class="field"><span class="lab" id="x-jlab">Working out best[<span id="x-jv"></span>]</span><input type="range" id="x-j" min="1" max="10" value="4" aria-labelledby="x-jlab"></label>
+        <button class="btn" type="button" id="x-next">Next word</button>
+      </div>
+      <div class="wordstrip" id="x-words" aria-label="The words of the example, numbered"></div>
+      <div class="field"><span class="lab">Step 1. Every last line that could end at the highlighted word</span><div class="tablewrap"><table class="small" id="x-cand"></table></div></div>
+      <div class="field"><span class="lab">Step 2. The list <code>best</code>, filling in as you go</span><div class="tablewrap"><table class="small" id="x-best"></table></div></div>
+      <p class="status" id="x-status" role="status" aria-live="polite"></p>
+      <p id="x-walk"></p>
     </div>
     <details>
       <summary>The code (it is what this page runs)</summary>
@@ -323,7 +349,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
   function draw() {
     words = $('para').value.split(/\s+/).filter(Boolean).slice(0, CAP);
     $('w-lab').textContent = 'Line width: ' + W + ' characters';
-    if (!words.length) { ['pg-g', 'pg-o', 'ro-g', 'ro-o'].forEach((id) => { $(id).textContent = ''; }); $('w-status').textContent = 'Type a paragraph.'; $('cand').textContent = ''; return; }
+    if (!words.length) { ['pg-g', 'pg-o', 'ro-g', 'ro-o'].forEach((id) => { $(id).textContent = ''; }); $('w-status').textContent = 'Type a paragraph.'; return; }
     const g = greedyBreaks(words, W), o = optimalBreaks(words, W, power);
     drawPage($('pg-g'), g); drawPage($('pg-o'), o.lines);
     readout('ro-g', g); readout('ro-o', o.lines);
@@ -331,27 +357,50 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
     $('w-status').textContent = same ? 'At this width both methods choose the same breaks. Try another width.'
       : 'The two settings differ. The best total cost is ' + co + ' against ' + cg + ' for greedy' + (o.lines.length !== g.length ? ', and it uses ' + plural(o.lines.length, 'line', 'lines') + ' against ' + g.length : '') + '.';
     if (cg < co) $('w-status').textContent += ' (Greedy has the lower total here, which should not happen.)';
-    // the candidates explorer
-    const jm = $('jpos'); jm.max = words.length; if (+jm.value > words.length) jm.value = words.length;
-    drawCand(o);
+    drawExample();
   }
-  function drawCand(o) {
-    const j = +$('jpos').value, tbl = $('cand');
-    $('j-lab').textContent = 'Setting the first ' + j + ' of ' + words.length + ' words';
-    tbl.textContent = '';
-    tbl.innerHTML = '<thead><tr><th>Last line holds</th><th class="num">Slack</th><th class="num">Its cost</th><th class="num">Best before it</th><th class="num">Total</th></tr></thead>';
-    const body = el('tbody'); let count = 0;
+  /* the worked example: the same calculation as optimalBreaks, shown one step at a time */
+  const EX = 'The committee met on Tuesday to discuss the new library'.split(' ');
+  let xW = 20, xJ = 4;
+  function drawExample() {
+    const n = EX.length, o = optimalBreaks(EX, xW, power), j = xJ;
+    const sl = (i, k) => Math.max(0, xW - widthOf(EX, i, k)), cost = (i, k) => lineCost(EX, i, k, xW, power);
+    $('x-wv').textContent = xW; $('x-jv').textContent = j; $('x-w').value = xW; $('x-j').value = j;
+    // the words
+    const strip = $('x-words'); strip.textContent = '';
+    EX.forEach((w, k) => { const d = el('span', 'w' + (k + 1 === j ? ' cur' : k + 1 < j ? ' in' : '')); d.append(el('span', null, w), el('small', null, String(k + 1))); strip.appendChild(d); });
+    // step 1: every last line that could end at word j
+    const cand = $('x-cand'); cand.textContent = '';
+    cand.innerHTML = '<thead><tr><th>If the last line is</th><th class="num">Looseness</th><th class="num">Its cost' + (power === 1 ? '' : ' (looseness squared)') + '</th><th class="num">+ best[i], already known</th><th class="num">= Total</th></tr></thead>';
+    const body = el('tbody'); let pickRow = null;
     for (let i = j - 1; i >= 0; i--) {
-      if (i < j - 1 && widthOf(words, i, j) > W) break;
-      count++;
-      const c = lineCost(words, i, j, W, power), tot = o.best[i] + c;
-      const tr = el('tr', i === o.from[j] ? 'pick' : '');
-      const td = el('td', 'mono', words.slice(i, j).join(' ')); if (i === o.from[j]) td.appendChild(el('span', 'tag', 'cheapest'));
-      tr.append(td, el('td', 'num', String(slackOf(i, j))), el('td', 'num', String(c)), el('td', 'num', String(o.best[i])), el('td', 'num', String(tot)));
-      body.appendChild(tr);
+      if (i < j - 1 && widthOf(EX, i, j) > xW) break;
+      const c = cost(i, j), tot = o.best[i] + c, isPick = i === o.from[j];
+      const tr = el('tr', isPick ? 'pick' : ''), td = el('td', 'mono', (i + 1 === j ? 'word ' + j : 'words ' + (i + 1) + ' to ' + j) + ': “' + EX.slice(i, j).join(' ') + '”');
+      if (isPick) td.appendChild(el('span', 'tag', 'cheapest'));
+      tr.append(td, el('td', 'num', j === n ? '–' : String(sl(i, j))), el('td', 'num', String(c)), el('td', 'num', 'best[' + i + '] = ' + o.best[i]), el('td', 'num', String(tot)));
+      body.appendChild(tr); if (isPick) pickRow = { i, c, tot };
     }
-    tbl.appendChild(body);
-    $('j-status').textContent = 'There ' + (count === 1 ? 'is one place' : 'are ' + count + ' places') + ' the last line of these ' + j + ' words could start. The cheapest total is ' + o.best[j] + ', so best[' + j + '] = ' + o.best[j] + ', and that line starts at word ' + (o.from[j] + 1) + '.';
+    cand.appendChild(body);
+    // step 2: the list best, up to j
+    const bt = $('x-best'); bt.textContent = '';
+    bt.innerHTML = '<thead><tr><th class="num">j</th><th>The first j words end with</th><th class="num">best[j]</th><th class="num">Its last line starts at word</th></tr></thead>';
+    const bb = el('tbody');
+    for (let k = 0; k <= n; k++) {
+      const known = k <= j, tr = el('tr', k === j ? 'cur' : '');
+      tr.append(el('td', 'num', String(k)), el('td', 'mono', k === 0 ? '(no words)' : '… ' + EX[k - 1]), el('td', 'num', known ? String(o.best[k]) : '·'), el('td', 'num', known && k > 0 ? String(o.from[k] + 1) : '·'));
+      bb.appendChild(tr);
+    }
+    bt.appendChild(bb);
+    // the sentence
+    const rows = body.children.length, p = pickRow;
+    $('x-status').textContent = 'For the ' + (j === 1 ? 'first word' : 'first ' + j + ' words') + ' there ' + (rows === 1 ? 'is one possible last line' : 'are ' + rows + ' possible last lines') + '. For each, add its cost to the cheapest cost of the words before it. The smallest total is ' + o.best[j] + ', from the line marked cheapest, so best[' + j + '] = ' + o.best[j] + ' and we remember that this last line starts at word ' + (p.i + 1) + '. For that row, the line costs ' + p.c + ' and best[' + p.i + '] is ' + o.best[p.i] + ', which gives ' + p.tot + '.' + (j === n ? ' This is the paragraph’s final line, which is allowed to be short, so its cost is 0.' : '');
+    // reading off the lines
+    const walk = $('x-walk');
+    if (j < n) { walk.textContent = 'Keep going to the last word, ' + n + ', to see how the lines are read off.'; return; }
+    const back = []; let k = n;
+    while (k > 0) { back.push([o.from[k], k]); k = o.from[k]; }
+    walk.innerHTML = 'Reading off the lines. best[' + n + '] = ' + o.best[n] + ' is the cheapest total for all ' + n + ' words. ' + back.map(([i, k2], idx) => (idx === 0 ? 'Its last line starts at word ' + (i + 1) + ': ' : 'Before that, best[' + k2 + '] remembered a line starting at word ' + (i + 1) + ': ') + '<strong>“' + esc(EX.slice(i, k2).join(' ')) + '”</strong>').join('. ') + '. In reading order the lines are ' + back.slice().reverse().map(([i, k2]) => '“' + esc(EX.slice(i, k2).join(' ')) + '”').join(', ') + '.';
   }
   function seg(id, name, registry, current, onPick) {
     const e = $(id);
@@ -373,7 +422,9 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
     $('jump-status').textContent = 'At width ' + W + ' they differ (they agree at ' + (hi - lo + 1 - found.length) + ' of the ' + (hi - lo + 1) + ' widths here). Switch between them above and watch the lines move. With plain slack the loosest line is ' + loosest(a, W) + '; with squared it is ' + loosest(c, W) + '.';
   });
   $('para').addEventListener('input', draw);
-  $('jpos').addEventListener('input', draw);
+  $('x-w').addEventListener('input', () => { xW = +$('x-w').value; drawExample(); });
+  $('x-j').addEventListener('input', () => { xJ = +$('x-j').value; drawExample(); });
+  $('x-next').addEventListener('click', () => { xJ = xJ >= EX.length ? 1 : xJ + 1; drawExample(); });
   $('para').value = 'The committee met on Tuesday to discuss the new library hours, the plan for the garden, and several small repairs that had been waiting since the spring. Nobody objected to the earlier opening time, though a few members worried about the cost of heating the reading room on cold mornings.';
   draw();
 })();
