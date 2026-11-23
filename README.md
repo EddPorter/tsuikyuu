@@ -21,6 +21,7 @@ Each explainer is a single standalone HTML file in its own folder, so its addres
 | [The most likely story](viterbi/) | The Viterbi algorithm on a small hidden-weather puzzle: the grid of best-so-far scores, the links followed back to recover the story, and a check against scoring every story. Uses made-up numbers only. |
 | [How much to believe](kalman-filter/) | The Kalman filter: combining a prediction and a noisy reading by how certain each is, the predict and update loop on a noisy track, mis-tuned noise settings, and a hidden speed learned from positions alone. Uses made-up numbers only. |
 | [Where am I, and where is everything?](slam/) | SLAM with an extended Kalman filter: a robot driving laps with noisy odometry, the drift of dead reckoning, landmarks added to a joint map, loop closure, and what goes wrong when the links between robot and landmarks are dropped. Uses made-up numbers only. |
+| [Reaching the target](countdown/) | The numbers game from a quiz show: reaching a target from six numbers with the four operations, by trying everything and by remembering what each subset of the numbers can make, with the work counted, a map of reachable targets and a comparison of how many large numbers to take. Uses randomly dealt numbers only. |
 
 More explainers will be added as new folders, and listed in [`index.html`](index.html).
 

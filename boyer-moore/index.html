@@ -189,6 +189,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       <div class="tablewrap"><table id="race"></table></div>
       <p class="status" id="race-status" role="status" aria-live="polite"></p>
     </div>
+    <p>The two kinds of column answer different questions. &ldquo;Comparisons per text letter&rdquo; is the total number of comparisons divided by the length of the text, so a letter compared from three different alignments counts three times. &ldquo;Share of text letters compared at least once&rdquo; counts each letter once. When slides are long, a letter is rarely compared twice and the two track each other. When slides are short, as with only 0 and 1, the pattern keeps overlapping where it has just been, letters are compared again and again, and the comparisons per letter can sit well above the share of letters touched.</p>
     <p>These numbers count comparisons, not time. A real search library also cares about the processor&rsquo;s memory behaviour and may use special instructions to scan quickly, so fewer comparisons does not always mean a faster program. Treat this as showing the idea, not as a benchmark.</p>
   </section>
 
@@ -419,7 +420,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
     });
     const max = Math.max(...rows.flatMap((x) => [x[1], x[2]]));
     const tbl = $('race'); tbl.textContent = '';
-    tbl.innerHTML = '<thead><tr><th class="num">Pattern length</th><th>Left to right</th><th>From the end</th><th class="num">Text letters looked at, from the end</th></tr></thead>';
+    tbl.innerHTML = '<thead><tr><th class="num">Pattern length</th><th>Comparisons per text letter, left to right</th><th>Comparisons per text letter, from the end</th><th class="num">Share of text letters compared at least once, from the end</th></tr></thead>';
     const body = el('tbody');
     rows.forEach(([m, a, b, seen]) => {
       const tr = el('tr'); tr.appendChild(el('td', 'num', String(m)));
@@ -431,11 +432,11 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       body.appendChild(tr);
     });
     tbl.appendChild(body);
-    $('race-status').textContent = 'Comparisons per letter of text, averaged over three patterns. ' + (agree ? 'Both methods found exactly the matches the browser’s own search finds.' : 'The methods disagree with the browser’s own search, which should not happen.');
+    $('race-status').textContent = 'Averaged over three patterns. The last column counts each text letter once, however many times it was compared, so it is not the same thing as the comparisons per letter. ' + (agree ? 'Both methods found exactly the matches the browser’s own search finds.' : 'The methods disagree with the browser’s own search, which should not happen.');
   }
   seg('seg-kind', 'kind', KINDS, kind, (v) => { kind = v; runRace(); });
 
-  $('text').value = 'a fox sat by the old stone wall at the edge of the shore';
+  $('text').value = 'a tonne of stones sat on the stand, one stone in the stove';
   $('pat').value = 'stone';
   rebuild();
   runRace();

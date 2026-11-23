@@ -101,12 +101,21 @@ input[type="range"] { accent-color: var(--accent); width: 220px; max-width: 100%
 /* grids */
 .gridwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); padding: 6px; }
 table.dp { border-collapse: collapse; font-family: var(--font-mono); font-size: 13px; width: auto; min-width: 0; }
-table.dp th, table.dp td { border: 1px solid var(--line); padding: 4px 6px; min-width: 34px; text-align: center; }
+table.dp th, table.dp td { border: 1px solid var(--line); padding: 4px 6px; min-width: 46px; text-align: center; }
 table.dp th { background: var(--cell); font-weight: 700; color: var(--ink); font-size: 13px; text-transform: none; letter-spacing: 0; }
 table.dp td.blank { color: transparent; }
 table.dp td.eq { box-shadow: inset 0 0 0 2px var(--muted); }
-table.dp td.path { background: var(--accent-soft); font-weight: 700; }
 table.dp td.keep { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+table.dp td.sub { background: var(--accent-soft); box-shadow: inset 0 0 0 3px var(--accent); font-weight: 700; }
+table.dp td.add { background: var(--add-bg); color: var(--add); font-weight: 700; }
+table.dp td.del { background: var(--del-bg); color: var(--del); font-weight: 700; }
+table.dp td small { display: block; font-family: var(--font-body); font-size: 10.5px; font-weight: 500; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--line); }
+.legend .l-keep::before { background: var(--accent); border-color: var(--accent); }
+.legend .l-sub::before { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.legend .l-add::before { background: var(--add-bg); border-color: var(--add); }
+.legend .l-del::before { background: var(--del-bg); border-color: var(--del); }
 table.dp td.now { outline: 3px solid var(--accent); outline-offset: -3px; }
 .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 table.parts { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
@@ -172,7 +181,15 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       <div><dt>The letters are equal</dt><dd>Take the cell diagonally up and to the left, and add one. We can keep this letter on top of the best answer for everything before it.</dd></div>
       <div><dt>They differ</dt><dd>One of the two letters cannot be kept. Take the larger of the cell above (drop the side letter) and the cell to the left (drop the top letter).</dd></div>
     </dl>
-    <p>The bottom-right cell is the answer for the whole strings. Step through it. Cells with a heavy grey border are where the two letters match. When the grid is full, walking back from the bottom-right corner gives the kept letters: a diagonal step along a matching cell keeps a letter (dark blue), and any other step is a deletion or an addition.</p>
+    <p>The bottom-right cell is the answer for the whole strings. Step through it. Cells with a heavy grey border are where the two letters match.</p>
+    <p>The grid gives the <em>length</em> of the longest common subsequence. To find <em>which</em> letters it is, and so the diff itself, <strong>walk back</strong> from the bottom-right corner to the top-left, asking at each cell how its number was made:</p>
+    <dl class="lines">
+      <div><dt>The two letters are equal</dt><dd>That letter was kept. Move diagonally up and left, to the cell the number came from.</dd></div>
+      <div><dt>They differ, and the cell to the left is at least as big as the cell above</dt><dd>The number came from the left, so the top string&rsquo;s letter for this column was <em>added</em>. Move left.</dd></div>
+      <div><dt>They differ, and the cell above is bigger</dt><dd>The number came from above, so the side string&rsquo;s letter for this row was <em>deleted</em>. Move up.</dd></div>
+      <div><dt>At an edge</dt><dd>If one string has run out, whatever is left of the other is all added or all deleted.</dd></div>
+    </dl>
+    <p>You reach the top-left corner after as many steps as there are changes and kept letters. The steps come out last to first, so reverse them to read the diff in order. When the left and above cells are equal, either choice is valid, and this page goes left. Going up instead would give a different but equally short diff. Fill the grid, then walk back one step at a time.</p>
     <div class="panel">
       <div class="row">
         <button class="btn" type="button" id="g-step">Fill next cell</button>
@@ -180,7 +197,13 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
         <button class="btn" type="button" id="g-reset">Start again</button>
         <label class="field"><span class="lab" id="g-lab">Cells filled</span><input type="range" id="g-range" min="0" max="1" value="0" aria-labelledby="g-lab"></label>
       </div>
+      <div class="row">
+        <button class="btn" type="button" id="g-bstep">Walk back one step</button>
+        <button class="btn" type="button" id="g-ball">Walk all the way back</button>
+        <button class="btn" type="button" id="g-brst">Reset the walk</button>
+      </div>
       <div class="gridwrap"><table class="dp" id="grid"></table></div>
+      <div class="legend" aria-hidden="true"><span class="l-keep">keep (letters equal)</span><span class="l-add">add (came from the left)</span><span class="l-del">delete (came from above)</span></div>
       <p class="status" id="g-status" role="status" aria-live="polite"></p>
     </div>
     <p>The grid has one cell per pair of positions, so its size is the length of one string times the length of the other. That is a few hundred steps for these strings, rather than thousands of subsequences, and it grows by multiplication where trying every subsequence grows by doubling. This is the whole idea of dynamic programming: answer small questions first, write the answers down, and build the big answer from them.</p>
@@ -193,13 +216,20 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
   <section aria-labelledby="h-edit">
     <h2 id="h-edit">Edit distance: allow a swap</h2>
     <p>A diff can only add and delete. If one letter becomes another, a diff sees a deletion plus an addition. Often what you want to know is <strong>how many single-letter edits turn one word into another</strong>, where an edit may be an insertion, a deletion or a substitution. That number is the <em>edit distance</em>, often called Levenshtein distance. It is what spelling correctors and &ldquo;did you mean&rdquo; suggestions use to rank candidate words.</p>
-    <p>The grid is almost the same, with two changes. It holds the smallest number of edits where the other held the longest common subsequence, and a substitution is a third way into each cell.</p>
+    <p>The grid is almost the same, with two changes. It holds the smallest number of edits where the other held the longest common subsequence, and a substitution is a third way into each cell. Each cell is the smallest of three: the cell above plus one (delete a letter), the cell to the left plus one (insert a letter), and the diagonal cell plus zero if the letters are equal, or plus one if not (keep the letter, or swap it).</p>
+    <p>Walking back works the same way as before, from the bottom-right corner. At each cell, find which of the three gave its number. If it was the diagonal, the move is either <em>same</em> (the letters are equal, no cost) or a <em>swap</em> (the letters differ, cost one). If it was the left cell, a letter was <em>inserted</em>. If it was the cell above, one was <em>deleted</em>. A swap and a same move both go diagonally, and the only way to tell them apart is whether the two letters are equal, so the grid below labels every cell on the path. The walk checks the diagonal first, then left, then above, so ties go to the diagonal.</p>
     <div class="panel">
       <div class="two">
         <label class="field" for="e-a"><span class="lab">From</span><input type="text" id="e-a" maxlength="14" autocomplete="off" spellcheck="false"></label>
         <label class="field" for="e-b"><span class="lab">To</span><input type="text" id="e-b" maxlength="14" autocomplete="off" spellcheck="false"></label>
       </div>
+      <div class="row">
+        <button class="btn" type="button" id="e-bstep">Walk back one step</button>
+        <button class="btn" type="button" id="e-ball">Walk all the way back</button>
+        <button class="btn" type="button" id="e-brst">Reset the walk</button>
+      </div>
       <div class="gridwrap"><table class="dp" id="e-grid"></table></div>
+      <div class="legend" aria-hidden="true"><span class="l-keep">same (letters equal, no cost)</span><span class="l-sub">swap (letters differ, cost 1)</span><span class="l-add">insert (from the left, cost 1)</span><span class="l-del">delete (from above, cost 1)</span></div>
       <div id="e-out" class="inline" aria-label="The edits"></div>
       <p class="status" id="e-status" role="status" aria-live="polite"></p>
     </div>
@@ -306,11 +336,11 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
     let i = a.length, j = b.length;
     while (i > 0 || j > 0) {
       if (i > 0 && j > 0 && same(a[i - 1], b[j - 1])) {
-        ops.push({ op: 'keep', a: a[i - 1], b: b[j - 1] }); i--; j--;
+        ops.push({ op: 'keep', a: a[i - 1], b: b[j - 1], at: [i, j] }); i--; j--;
       } else if (j > 0 && (i === 0 || t[i][j - 1] >= t[i - 1][j])) {
-        ops.push({ op: 'add', b: b[j - 1] }); j--;
+        ops.push({ op: 'add', b: b[j - 1], at: [i, j] }); j--;
       } else {
-        ops.push({ op: 'del', a: a[i - 1] }); i--;
+        ops.push({ op: 'del', a: a[i - 1], at: [i, j] }); i--;
       }
       path.push([i, j]);
     }
@@ -338,11 +368,11 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
     let i = a.length, j = b.length;
     while (i > 0 || j > 0) {
       if (i > 0 && j > 0 && d[i][j] === d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)) {
-        steps.push(a[i - 1] === b[j - 1] ? { op: 'keep', a: a[i - 1] } : { op: 'sub', a: a[i - 1], b: b[j - 1] }); i--; j--;
+        steps.push(a[i - 1] === b[j - 1] ? { op: 'keep', a: a[i - 1], at: [i, j] } : { op: 'sub', a: a[i - 1], b: b[j - 1], at: [i, j] }); i--; j--;
       } else if (j > 0 && d[i][j] === d[i][j - 1] + 1) {
-        steps.push({ op: 'add', b: b[j - 1] }); j--;
+        steps.push({ op: 'add', b: b[j - 1], at: [i, j] }); j--;
       } else {
-        steps.push({ op: 'del', a: a[i - 1] }); i--;
+        steps.push({ op: 'del', a: a[i - 1], at: [i, j] }); i--;
       }
       path.push([i, j]);
     }
@@ -464,17 +494,19 @@ Leave to cool.`],
       'The longest common subsequence has length ' + len + (len ? ': “' + kept + '”' : '') + '. The first string has ' + a.length + ' letters and the second ' + b.length + ', so ' + (a.length - len) + ' are deleted and ' + (b.length - len) + ' are added, ' + plural(changes, 'change', 'changes') + ' in all. The first string alone has ' + (2 ** a.length).toLocaleString('en-GB') + ' subsequences to choose from.';
   }
   let filled = 0;
+  let back = 0;
+  const LCS_LABEL = { keep: 'keep', add: 'add', del: 'delete' };
   function drawGrid() {
     const a = [...$('s-a').value], b = [...$('s-b').value], tbl = $('grid');
     tbl.textContent = '';
     const total = a.length * b.length;
     $('g-range').max = total; filled = Math.min(filled, total); $('g-range').value = filled;
     const t = lcsTable(a, b, exact);
-    const done = filled === total;
-    const { ops, path } = walkBack(a, b, t, exact);
-    const onPath = new Set(path.map(([i, j]) => i + ':' + j));
-    const keeps = new Set();
-    { let i = a.length, j = b.length; ops.slice().reverse().forEach((o) => { if (o.op === 'keep') { keeps.add(i + ':' + j); i--; j--; } else if (o.op === 'add') j--; else i--; }); }
+    const done = filled === total && total > 0;
+    const { ops } = walkBack(a, b, t, exact), rev = ops.slice().reverse();     // the moves in the order they are made
+    back = done ? Math.min(back, rev.length) : 0;
+    const marks = new Map(rev.slice(0, back).map((o) => [o.at[0] + ':' + o.at[1], o.op]));
+    const here = done ? (back < rev.length ? rev[back].at : [0, 0]) : null;
     const nowI = filled ? Math.floor((filled - 1) / b.length) + 1 : 0, nowJ = filled ? (filled - 1) % b.length + 1 : 0;
     const head = el('tr', null); head.append(el('th'), el('th'));
     b.forEach((ch) => head.appendChild(el('th', null, ch)));
@@ -487,48 +519,84 @@ Leave to cool.`],
         const key = i + ':' + j;
         let cls = isFilled ? '' : 'blank';
         if (i && j && isFilled && a[i - 1] === b[j - 1]) cls += ' eq';
-        if (done && onPath.has(key)) cls += keeps.has(key) ? ' keep' : ' path';
+        if (marks.has(key)) cls += ' ' + marks.get(key);
         if (i === nowI && j === nowJ && filled && !done) cls += ' now';
-        tr.appendChild(el('td', cls.trim(), String(t[i][j])));
+        if (here && here[0] === i && here[1] === j) cls += ' now';
+        const td = el('td', cls.trim(), String(t[i][j]));
+        if (marks.has(key)) td.appendChild(el('small', null, LCS_LABEL[marks.get(key)]));
+        tr.appendChild(td);
       }
       body.appendChild(tr);
     }
     tbl.appendChild(body);
-    if (!total) $('g-status').textContent = 'Type two non-empty strings above.';
-    else if (!filled) $('g-status').textContent = 'The first row and column are zero: with nothing from one string, nothing can be shared. Press “Fill next cell”.';
+    $('g-bstep').disabled = !total || (done && back >= rev.length);
+    const st = $('g-status');
+    if (!total) st.textContent = 'Type two non-empty strings above.';
+    else if (!filled) st.textContent = 'The first row and column are zero: with nothing from one string, nothing can be shared. Press “Fill next cell”.';
     else if (!done) {
       const x = a[nowI - 1], y = b[nowJ - 1];
-      $('g-status').textContent = 'Cell for “' + a.slice(0, nowI).join('') + '” against “' + b.slice(0, nowJ).join('') + '”. ' +
+      st.textContent = 'Cell for “' + a.slice(0, nowI).join('') + '” against “' + b.slice(0, nowJ).join('') + '”. ' +
         (x === y ? 'The letters ' + x + ' and ' + y + ' are equal, so take the diagonal (' + t[nowI - 1][nowJ - 1] + ') and add one: ' + t[nowI][nowJ] + '.'
           : 'The letters ' + x + ' and ' + y + ' differ, so take the larger of above (' + t[nowI - 1][nowJ] + ') and left (' + t[nowI][nowJ - 1] + '): ' + t[nowI][nowJ] + '.');
-    } else $('g-status').textContent = 'The grid is full. The bottom-right cell says the longest common subsequence has length ' + t[a.length][b.length] + '. The shaded path is the walk back; dark cells are kept letters.';
+    } else if (back === 0) st.textContent = 'The grid is full. The bottom-right cell says the longest common subsequence has length ' + t[a.length][b.length] + '. The walk back starts there, in the outlined cell. Press “Walk back one step”.';
+    else {
+      const o = rev[back - 1], [ci, cj] = o.at;
+      const where = 'At the cell for “' + a.slice(0, ci).join('') + '” and “' + b.slice(0, cj).join('') + '” ';
+      let msg;
+      if (o.op === 'keep') msg = where + 'the last letters are both “' + a[ci - 1] + '”, so that letter is kept. Move diagonally up and left.';
+      else if (o.op === 'add') msg = ci === 0 ? where + '(the first string is used up) the rest of the second string is added. “' + b[cj - 1] + '” is added. Move left.' : where + 'the letters “' + a[ci - 1] + '” and “' + b[cj - 1] + '” differ, and the cell to the left (' + t[ci][cj - 1] + ') is at least as big as the cell above (' + t[ci - 1][cj] + '), so “' + b[cj - 1] + '” from the second string was added. Move left.';
+      else msg = cj === 0 ? where + '(the second string is used up) the rest of the first string is deleted. “' + a[ci - 1] + '” is deleted. Move up.' : where + 'the letters “' + a[ci - 1] + '” and “' + b[cj - 1] + '” differ, and the cell above (' + t[ci - 1][cj] + ') is bigger than the cell to the left (' + t[ci][cj - 1] + '), so “' + a[ci - 1] + '” from the first string was deleted. Move up.';
+      st.textContent = back < rev.length ? msg : msg + ' That reaches the top-left corner. Read in order, the diff is: ' + ops.map((x) => (x.op === 'keep' ? 'keep ' + x.a : x.op === 'add' ? 'add ' + x.b : 'delete ' + x.a)).join(', ') + '.';
+    }
   }
 
   /* ---------- section 4: edit distance ---------- */
+  let eback = Infinity;
+  const EDIT_LABEL = { keep: 'same', sub: 'swap', add: 'insert', del: 'delete' };
   function drawEdit() {
     const a = [...$('e-a').value], b = [...$('e-b').value], tbl = $('e-grid'), out = $('e-out');
     tbl.textContent = ''; out.textContent = '';
-    const d = editTable(a, b), { steps, path } = editSteps(a, b, d);
-    const onPath = new Set(path.map(([i, j]) => i + ':' + j));
+    const d = editTable(a, b), { steps } = editSteps(a, b, d), rev = steps.slice().reverse();
+    eback = Math.min(eback, rev.length);
+    const marks = new Map(rev.slice(0, eback).map((o) => [o.at[0] + ':' + o.at[1], o.op]));
+    const here = eback < rev.length ? rev[eback].at : [0, 0];
     const head = el('tr'); head.append(el('th'), el('th'));
     b.forEach((ch) => head.appendChild(el('th', null, ch)));
     const thead = el('thead'); thead.appendChild(head); tbl.appendChild(thead);
     const body = el('tbody');
     for (let i = 0; i <= a.length; i++) {
       const tr = el('tr'); tr.appendChild(el('th', null, i ? a[i - 1] : ''));
-      for (let j = 0; j <= b.length; j++) tr.appendChild(el('td', onPath.has(i + ':' + j) ? 'path' : '', String(d[i][j])));
+      for (let j = 0; j <= b.length; j++) {
+        const key = i + ':' + j;
+        let cls = marks.has(key) ? marks.get(key) : '';
+        if (here[0] === i && here[1] === j) cls += ' now';
+        const td = el('td', cls.trim(), String(d[i][j]));
+        if (marks.has(key)) td.appendChild(el('small', null, EDIT_LABEL[marks.get(key)]));
+        tr.appendChild(td);
+      }
       body.appendChild(tr);
     }
     tbl.appendChild(body);
-    steps.forEach((s) => out.appendChild(el('span', s.op === 'keep' ? '' : s.op, s.op === 'add' ? s.b : s.op === 'sub' ? s.a + '→' + s.b : s.a)));
+    const taken = rev.slice(0, eback).reverse();      // the edits found so far, in reading order
+    taken.forEach((s) => out.appendChild(el('span', s.op === 'keep' ? '' : s.op, s.op === 'add' ? s.b : s.op === 'sub' ? s.a + '→' + s.b : s.a)));
+    $('e-bstep').disabled = eback >= rev.length;
+    const st = $('e-status');
+    if (!a.length && !b.length) { st.textContent = 'Type two words.'; return; }
+    if (eback === 0) { st.textContent = 'The walk back starts in the bottom-right corner, the outlined cell, which holds the edit distance, ' + d[a.length][b.length] + '. Press “Walk back one step”.'; return; }
+    const o = rev[eback - 1], [i, j] = o.at, where = 'At the cell for \u201c' + a.slice(0, i).join('') + '\u201d and \u201c' + b.slice(0, j).join('') + '\u201d (' + d[i][j] + '): ';
+    const move = where + (o.op === 'keep' ? 'the last letters are both \u201c' + o.a + '\u201d and the diagonal cell holds ' + d[i - 1][j - 1] + ', the same number, so the letter stays as it is (same). Move diagonally.'
+      : o.op === 'sub' ? 'the last letters \u201c' + o.a + '\u201d and \u201c' + o.b + '\u201d differ, and the diagonal cell holds ' + d[i - 1][j - 1] + ', one less, so \u201c' + o.a + '\u201d was swapped for \u201c' + o.b + '\u201d (swap). Move diagonally.'
+      : o.op === 'add' ? 'the cell to the left holds ' + d[i][j - 1] + ', one less, so \u201c' + o.b + '\u201d was inserted. Move left.'
+      : 'the cell above holds ' + d[i - 1][j] + ', one less, so \u201c' + o.a + '\u201d was deleted. Move up.');
+    if (eback < rev.length) { st.textContent = move; return; }
     const dist = d[a.length][b.length];
     const lcs = lcsTable(a, b, exact)[a.length][b.length], asDiff = a.length + b.length - 2 * lcs;
-    const sub = steps.filter((s) => s.op === 'sub').map((s) => s.a + ' to ' + s.b), ins = steps.filter((s) => s.op === 'add').map((s) => s.b), del = steps.filter((s) => s.op === 'del').map((s) => s.a);
+    const sub = steps.filter((x) => x.op === 'sub').map((x) => x.a + ' to ' + x.b), ins = steps.filter((x) => x.op === 'add').map((x) => x.b), del = steps.filter((x) => x.op === 'del').map((x) => x.a);
     const bits = [];
     if (sub.length) bits.push('swap ' + sub.join(', '));
     if (ins.length) bits.push('insert ' + ins.join(', '));
     if (del.length) bits.push('delete ' + del.join(', '));
-    $('e-status').textContent = !a.length && !b.length ? 'Type two words.' : 'Edit distance ' + dist + (bits.length ? ': ' + bits.join('; ') : '') + '. As a plain diff, which cannot swap, the same pair needs ' + plural(asDiff, 'change', 'changes') + '. In the picture, blue with an arrow is a swap, green an insertion and red a deletion.';
+    st.textContent = move + ' That reaches the top-left corner. Edit distance ' + dist + (bits.length ? ': ' + bits.join('; ') : '') + '. As a plain diff, which cannot swap, the same pair needs ' + plural(asDiff, 'change', 'changes') + '. Cells on the path are labelled with the move that made them: same, swap, insert or delete.';
   }
 
   /* ---------- section 5: big files ---------- */
@@ -584,13 +652,20 @@ Leave to cool.`],
     $('presets').appendChild(btn);
   });
   $('ta').addEventListener('input', drawDiff); $('tb').addEventListener('input', drawDiff);
-  const letters = () => { filled = 0; strips(); drawGrid(); };
+  const letters = () => { filled = 0; back = 0; strips(); drawGrid(); };
   $('s-a').addEventListener('input', letters); $('s-b').addEventListener('input', letters);
   $('g-step').addEventListener('click', () => { filled = Math.min(filled + 1, $('s-a').value.length * $('s-b').value.length); drawGrid(); });
   $('g-all').addEventListener('click', () => { filled = $('s-a').value.length * $('s-b').value.length; drawGrid(); });
-  $('g-reset').addEventListener('click', () => { filled = 0; drawGrid(); });
+  $('g-reset').addEventListener('click', () => { filled = 0; back = 0; drawGrid(); });
   $('g-range').addEventListener('input', () => { filled = +$('g-range').value; drawGrid(); });
-  $('e-a').addEventListener('input', drawEdit); $('e-b').addEventListener('input', drawEdit);
+  $('g-bstep').addEventListener('click', () => { filled = $('s-a').value.length * $('s-b').value.length; back++; drawGrid(); });
+  $('g-ball').addEventListener('click', () => { filled = $('s-a').value.length * $('s-b').value.length; back = Infinity; drawGrid(); });
+  $('g-brst').addEventListener('click', () => { back = 0; drawGrid(); });
+  $('e-bstep').addEventListener('click', () => { eback++; drawEdit(); });
+  $('e-ball').addEventListener('click', () => { eback = Infinity; drawEdit(); });
+  $('e-brst').addEventListener('click', () => { eback = 0; drawEdit(); });
+  const editInput = () => { eback = Infinity; drawEdit(); };
+  $('e-a').addEventListener('input', editInput); $('e-b').addEventListener('input', editInput);
   $('big-run').addEventListener('click', runBig);
   $('k-range').addEventListener('input', () => { $('k-lab').textContent = 'Edits: ' + $('k-range').value; });
 
