@@ -314,7 +314,8 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
   }
   function readout(id, lines) {
     const slacks = lines.slice(0, -1).map(([i, j]) => slackOf(i, j));
-    const rows = [['Lines', lines.length], ['Total cost', costOf(lines)], ['Loosest line', slacks.length ? Math.max(...slacks) : 0]];
+    const worst = slacks.length ? Math.max(...slacks) : null;   // the last line is allowed to be short, so it is not counted
+    const rows = [['Lines', lines.length], ['Total cost', costOf(lines)], ['Spare characters on the loosest line', worst === null ? '\u2013' : worst + ' (line ' + (slacks.indexOf(worst) + 1) + ')']];
     $(id).textContent = '';
     rows.forEach(([k, v]) => { const d = el('div'); d.append(el('span', 'k', k), el('span', 'v', String(v))); $(id).appendChild(d); });
   }
