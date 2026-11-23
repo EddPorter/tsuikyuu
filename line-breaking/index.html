@@ -125,7 +125,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
 
   <section aria-labelledby="h-score">
     <h2 id="h-score">Scoring a line</h2>
-    <p>To compare two ways of setting a paragraph we need a number for each. This page uses a simple one. Each line has a width, measured in characters, and the words plus single spaces take up some of it. The unused remainder is the line&rsquo;s <strong>slack</strong>, which is also its looseness score. In a justified paragraph that slack has to be spread across the gaps between words, so a line with a lot of slack looks loose and gappy. The <strong>cost</strong> of a line is its slack raised to a power. A power above one makes one very loose line cost much more than several slightly loose ones, which is usually what you want. The last line of a paragraph is allowed to be short, so it costs nothing.</p>
+    <p>To compare two ways of setting a paragraph we need a number for each. This page uses a simple one. Each line has a width, measured in characters, and the words plus single spaces take up some of it. The unused remainder is the line&rsquo;s <strong>slack</strong>, which is also its looseness score. In a justified paragraph that slack has to be spread across the gaps between words, so a line with a lot of slack looks loose and gappy. The <strong>cost</strong> of a line is its slack raised to a power. With plain slack, the total depends almost only on how many lines the paragraph takes, so one huge gap costs the same as the same space spread over several lines, and the best setting just tries to save lines. Squaring makes one very loose line cost much more than several slightly loose ones, which is usually what you want. Higher powers, such as cubed, mostly choose the same breaks as squared, so this page offers just these two. The last line of a paragraph is allowed to be short, so it costs nothing.</p>
     <p>The best setting is the one with the smallest total cost over all the lines. Greedy does not look at the total at all.</p>
   </section>
 
@@ -139,7 +139,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
         <div class="field"><span class="lab" id="lab-show">Show lines as</span><div class="seg" role="radiogroup" aria-labelledby="lab-show" id="seg-show"></div></div>
         <div class="field"><span class="lab" id="lab-pow">Cost of a line</span><div class="seg" role="radiogroup" aria-labelledby="lab-pow" id="seg-pow"></div></div>
       </div>
-      <div class="row"><button class="btn" type="button" id="jump">Find a width where squared and cubed disagree</button><span class="note" id="jump-status" role="status" aria-live="polite"></span></div>
+      <div class="row"><button class="btn" type="button" id="jump">Find a width where the two costs disagree</button><span class="note" id="jump-status" role="status" aria-live="polite"></span></div>
       <div class="legend" aria-hidden="true"><span class="l-tight">snug line (slack 0 to 2)</span><span class="l-loose">loose line (slack more than 6)</span></div>
       <div class="two">
         <div class="col"><h3>Greedy</h3><div class="page" id="pg-g" aria-label="Paragraph set greedily"></div><div class="readout" id="ro-g"></div></div>
@@ -184,7 +184,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       <table style="min-width:520px">
         <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
         <tbody>
-          <tr><td>The cost of a line</td><td>Slack, squared, cubed</td><td>How much one bad line is worth against several mild ones. Plain slack against squared changes the breaks at many widths. Squared against cubed changes them only at a few, and the button above the lines finds one.</td></tr>
+          <tr><td>The cost of a line</td><td>Slack, or slack squared</td><td>How much one bad line is worth against several mild ones. Plain slack cares only about saving lines. Squared prefers even lines, and the two choose different breaks at many widths. The button above the lines finds one. Powers above two rarely change the breaks again.</td></tr>
           <tr><td>The last line</td><td>Free, or costed like the others</td><td>Whether a short final line is acceptable.</td></tr>
           <tr><td>The measure</td><td>Characters, or true widths of letters</td><td>How accurate the fit is.</td></tr>
           <tr><td>The way of choosing</td><td>Greedy, or the best total</td><td>Greedy is simple and fast but short-sighted. The best total costs a little more work and never does worse on this measure.</td></tr>
@@ -293,7 +293,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
 
   let W = 26, show = 'ragged', power = 2, words = [];
   const SHOW = { ragged: { name: 'Ragged' }, justified: { name: 'Justified' } };
-  const POWERS = { 1: { name: 'Slack' }, 2: { name: 'Slack squared' }, 3: { name: 'Slack cubed' } };
+  const POWERS = { 1: { name: 'Slack' }, 2: { name: 'Slack squared' } };
   const costOf = (lines) => lines.reduce((s, [i, j]) => s + lineCost(words, i, j, W, power), 0);
   const slackOf = (i, j) => Math.max(0, W - widthOf(words, i, j));
 
@@ -362,15 +362,15 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
   seg('seg-pow', 'pow', POWERS, power, (v) => { power = +v; draw(); });
   $('width').addEventListener('input', () => { W = +$('width').value; draw(); });
   $('jump').addEventListener('click', () => {
-    // look through the widths on the slider for one where squared and cubed choose different breaks
+    // look through the widths on the slider for one where plain slack and squared slack choose different breaks
     const lo = +$('width').min, hi = +$('width').max, found = [];
-    for (let w = lo; w <= hi; w++) if (JSON.stringify(optimalBreaks(words, w, 2).lines) !== JSON.stringify(optimalBreaks(words, w, 3).lines)) found.push(w);
-    if (!found.length) { $('jump-status').textContent = 'For this paragraph, squared and cubed choose the same breaks at every width from ' + lo + ' to ' + hi + '. Plain slack against squared does differ at many widths.'; return; }
+    for (let w = lo; w <= hi; w++) if (JSON.stringify(optimalBreaks(words, w, 1).lines) !== JSON.stringify(optimalBreaks(words, w, 2).lines)) found.push(w);
+    if (!found.length) { $('jump-status').textContent = 'For this paragraph, plain slack and squared slack choose the same breaks at every width from ' + lo + ' to ' + hi + '. Try a longer paragraph.'; return; }
     W = found.find((w) => w > W) ?? found[0]; $('width').value = W;
     const loosest = (lines, w) => { const sl = lines.slice(0, -1).map(([i, j]) => Math.max(0, w - widthOf(words, i, j))); const m = Math.max(...sl); return 'line ' + (sl.indexOf(m) + 1) + ', looseness ' + m; };
-    const a = optimalBreaks(words, W, 2).lines, c = optimalBreaks(words, W, 3).lines;
+    const a = optimalBreaks(words, W, 1).lines, c = optimalBreaks(words, W, 2).lines;
     draw();
-    $('jump-status').textContent = 'At width ' + W + ' they differ (squared and cubed agree at ' + (hi - lo + 1 - found.length) + ' of the ' + (hi - lo + 1) + ' widths here). Switch between them above and watch the lines move. Squared\u2019s loosest line is ' + loosest(a, W) + '; cubed\u2019s is ' + loosest(c, W) + '.';
+    $('jump-status').textContent = 'At width ' + W + ' they differ (they agree at ' + (hi - lo + 1 - found.length) + ' of the ' + (hi - lo + 1) + ' widths here). Switch between them above and watch the lines move. With plain slack the loosest line is ' + loosest(a, W) + '; with squared it is ' + loosest(c, W) + '.';
   });
   $('para').addEventListener('input', draw);
   $('jpos').addEventListener('input', draw);
