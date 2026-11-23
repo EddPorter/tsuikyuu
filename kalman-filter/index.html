@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>How Much To Believe</title>
+<meta name="description" content="An interactive explainer of the Kalman filter: combining a prediction with a noisy reading, weighted by how certain each is, and tracking how certain the result is, with a hidden speed as the next step.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: one reading column that builds the idea in stages, each ending in a small workbench you can poke. */
+:root {
+  --bg: #eceff2; --surface: #fbfcfd; --cell: #f0f3f5; --ink: #16212b; --muted: #55646f; --line: #cdd5dc;
+  --accent: #2b2bd6; --accent-soft: #e3e3fb; --on-accent: #ffffff;
+  --c-pred: #b3570c; --c-read: #1d6f3d; --c-post: #2b2bd6; --c-true: #55646f; --c-alt: #a1237a;
+  --code-bg: #15222c; --code-ink: #d8e2ea; --code-cm: #7f93a3; --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+    --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+    --c-pred: #f0a05a; --c-read: #6fd78f; --c-post: #9aa2ff; --c-true: #93a3b1; --c-alt: #f08ad0; --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+  --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+  --c-pred: #f0a05a; --c-read: #6fd78f; --c-post: #9aa2ff; --c-true: #93a3b1; --c-alt: #f08ad0; --code-bg: #0b1117;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+input[type="range"] { accent-color: var(--accent); width: 100%; max-width: 280px; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px 20px; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 18px; height: 18px; }
+.status { min-height: 2.4em; font-weight: 500; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* charts */
+svg.chart { display: block; width: 100%; height: auto; background: var(--cell); border: 1px solid var(--line); border-radius: 6px; }
+svg.chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+svg.chart .grid { stroke: var(--line); stroke-width: 1; }
+svg.chart .s-true { fill: none; stroke: var(--c-true); stroke-width: 4; opacity: 0.55; }
+svg.chart .s-read { fill: var(--c-read); }
+svg.chart .s-est { fill: none; stroke: var(--c-post); stroke-width: 2.5; }
+svg.chart .s-alt { fill: none; stroke: var(--c-alt); stroke-width: 2.5; stroke-dasharray: 7 4; }
+svg.chart .s-avg { fill: none; stroke: var(--c-pred); stroke-width: 2; stroke-dasharray: 2 4; }
+svg.chart .s-band { fill: var(--c-post); opacity: 0.16; stroke: none; }
+svg.chart .cursor { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.6; }
+svg.chart .a-pred { fill: var(--c-pred); fill-opacity: 0.18; stroke: none; }
+svg.chart .a-read { fill: var(--c-read); fill-opacity: 0.18; stroke: none; }
+svg.chart .a-post { fill: var(--c-post); fill-opacity: 0.28; stroke: none; }
+svg.chart .l-pred { fill: none; stroke: var(--c-pred); stroke-width: 2.5; }
+svg.chart .l-read { fill: none; stroke: var(--c-read); stroke-width: 2.5; stroke-dasharray: 7 4; }
+svg.chart .l-post { fill: none; stroke: var(--c-post); stroke-width: 3; }
+svg.chart .tag-pred { fill: var(--c-pred); font-weight: 600; }
+svg.chart .tag-read { fill: var(--c-read); font-weight: 600; }
+svg.chart .tag-post { fill: var(--c-post); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { width: 28px; height: 10px; }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; }
+ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+@media (max-width: 920px) { dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>How much to believe</h1>
+    <p class="lead">A sensor reading is never quite right, and a prediction from the last step is never quite right either. A Kalman filter combines the two, leaning towards whichever is more certain, and keeps track of how certain the result is. This page builds that from two bell curves, then runs it on a noisy track, then adds a hidden speed, which is where it earns its keep.</p>
+  </header>
+
+  <section aria-labelledby="h-two">
+    <h2 id="h-two">Two guesses, one answer</h2>
+    <p>Suppose you are tracking something along a line. From where it was a moment ago you predict that it is now at about 40, give or take 12. A sensor then says 60, give or take 6. Each is a guess with a spread. We show a guess with uncertainty as a bell curve: the peak is the best value, and a wider curve means less certainty. Move the sliders.</p>
+    <div class="panel">
+      <div class="sliders">
+        <label class="field"><span class="lab" id="lab-pm">Prediction: <span id="v-pm"></span></span><input type="range" id="pm" min="0" max="100" step="1" aria-labelledby="lab-pm"></label>
+        <label class="field"><span class="lab" id="lab-ps">Prediction spread: <span id="v-ps"></span></span><input type="range" id="ps" min="2" max="30" step="1" aria-labelledby="lab-ps"></label>
+        <label class="field"><span class="lab" id="lab-rm">Reading: <span id="v-rm"></span></span><input type="range" id="rm" min="0" max="100" step="1" aria-labelledby="lab-rm"></label>
+        <label class="field"><span class="lab" id="lab-rs">Reading spread: <span id="v-rs"></span></span><input type="range" id="rs" min="2" max="30" step="1" aria-labelledby="lab-rs"></label>
+      </div>
+      <svg class="chart" id="bells1" viewBox="0 0 800 240" role="img" aria-label="Bell curves for the prediction, the reading, and the combined estimate"></svg>
+      <div class="readout">
+        <div><span class="k">Gain K</span><span class="v" id="o-k">0</span></div>
+        <div><span class="k">Combined estimate</span><span class="v" id="o-m">0</span></div>
+        <div><span class="k">Combined spread</span><span class="v" id="o-s">0</span></div>
+      </div>
+      <p class="status" id="o-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>The combined curve sits between the two, nearer the narrower one, and it is narrower than either. Two uncertain guesses together tell you more than one alone. The sums are short. Write <em>variance</em> for the spread squared.</p>
+    <dl class="lines">
+      <div><dt>gain K</dt><dd>The prediction&rsquo;s variance divided by the sum of both variances. It is near 1 when the prediction is vague and the reading is sharp, and near 0 when the reverse is true.</dd></div>
+      <div><dt>new estimate</dt><dd>The prediction, plus K times the gap between the reading and the prediction. The gap is called the <em>innovation</em>. K says how much of it to believe.</dd></div>
+      <div><dt>new variance</dt><dd>One minus K, times the prediction&rsquo;s variance. It is always smaller than the prediction&rsquo;s.</dd></div>
+    </dl>
+    <p>An equivalent way to see the last line: the combined variance is such that one over it equals one over the first variance plus one over the second. Certainties add up.</p>
+  </section>
+
+  <section aria-labelledby="h-loop">
+    <h2 id="h-loop">The loop</h2>
+    <p>A Kalman filter repeats two steps for every new reading.</p>
+    <dl class="lines">
+      <div><dt>Predict</dt><dd>Say where the thing should be now, from where it was. In this section the guess is simply &ldquo;where it was&rdquo;. Time has passed and it might have moved, so the variance is made bigger by a fixed amount, the <em>process noise</em>. Uncertainty grows.</dd></div>
+      <div><dt>Update</dt><dd>A reading arrives. Combine it with the prediction exactly as above. Uncertainty shrinks.</dd></div>
+    </dl>
+    <p>Below, a made-up thing moves along a slow wave. The sensor gives noisy readings of its position. The grey line is the truth, which a real filter would never see. The green dots are the readings, the blue line is the filter&rsquo;s estimate, and the pale band is one spread either side of it. The dotted orange line is a plain average of the last five readings, for comparison.</p>
+    <div class="panel">
+      <div class="sliders">
+        <label class="field"><span class="lab" id="lab-n1">How noisy the sensor really is: <span id="v-n1"></span></span><input type="range" id="n1" min="1" max="15" step="1" aria-labelledby="lab-n1"></label>
+        <label class="field"><span class="lab" id="lab-r1">How noisy the filter thinks it is: <span id="v-r1"></span></span><input type="range" id="r1" min="1" max="15" step="1" aria-labelledby="lab-r1"></label>
+        <label class="field"><span class="lab" id="lab-q1">How far the filter allows it to wander per step: <span id="v-q1"></span></span><input type="range" id="q1" min="0.1" max="5" step="0.1" aria-labelledby="lab-q1"></label>
+      </div>
+      <div class="row"><button class="btn" type="button" id="new1">New noise</button><button class="btn" type="button" id="match1">Make the filter&rsquo;s belief match the sensor</button></div>
+      <svg class="chart" id="chart1" viewBox="0 0 800 280" role="img" aria-label="The true path, the noisy readings, the filter's estimate and a moving average"></svg>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="0 0 28 10"><line x1="0" y1="5" x2="28" y2="5" class="s-true" style="stroke:var(--c-true);stroke-width:4;opacity:.55"/></svg>Truth (hidden)</span>
+        <span><svg viewBox="0 0 28 10"><circle cx="14" cy="5" r="3.5" style="fill:var(--c-read)"/></svg>Readings</span>
+        <span><svg viewBox="0 0 28 10"><line x1="0" y1="5" x2="28" y2="5" style="stroke:var(--c-post);stroke-width:2.5"/></svg>Filter estimate</span>
+        <span><svg viewBox="0 0 28 10"><line x1="0" y1="5" x2="28" y2="5" style="stroke:var(--c-pred);stroke-width:2;stroke-dasharray:2 4"/></svg>Average of last five</span>
+      </div>
+      <div class="readout">
+        <div><span class="k">Typical error: readings</span><span class="v" id="e1-raw">0</span></div>
+        <div><span class="k">Typical error: filter</span><span class="v" id="e1-kf">0</span></div>
+        <div><span class="k">Typical error: last-five average</span><span class="v" id="e1-avg">0</span></div>
+        <div><span class="k">Settled gain K</span><span class="v" id="e1-k">0</span></div>
+      </div>
+      <p class="status" id="st1" role="status" aria-live="polite"></p>
+    </div>
+    <p>&ldquo;Typical error&rdquo; is the root-mean-square distance from the truth, over all the steps shown. The filter beats the raw readings comfortably. You may also notice that the plain average of the last five readings does about as well, and sometimes better. That is fair. For a slow path and steady noise, averaging is a decent filter. What the Kalman filter adds is that it needs no window length to be chosen, it says how uncertain it is, it can use readings whose noise varies, and it can carry a model of the movement, which is the next part. Meanwhile, try these:</p>
+    <ul class="recap">
+      <li>Tell the filter the sensor is much <em>less</em> noisy than it is. It trusts every reading, so the estimate jitters.</li>
+      <li>Tell it the sensor is much <em>more</em> noisy than it is. It barely believes the readings, so it follows the path late.</li>
+      <li>Turn the wander allowance down. The estimate becomes smooth but slow, because the filter insists that nothing much happens between steps.</li>
+    </ul>
+    <p>Look at the band too. In this simple filter the uncertainty settles to a fixed width. It does not depend on what the readings were, only on how noisy the filter believes the sensor and the movement to be. That is a general property of this kind of filter, and it is why the gain can be worked out in advance.</p>
+    <h3 style="margin-top:8px">Looking at one step</h3>
+    <p>Drag the marker to a step. The three curves are exactly the ones from the first part: what the filter predicted, the reading, and the combined result.</p>
+    <div class="panel">
+      <label class="field"><span class="lab" id="lab-t1">Step: <span id="v-t1"></span></span><input type="range" id="t1" min="1" max="79" step="1" aria-labelledby="lab-t1"></label>
+      <svg class="chart" id="bells2" viewBox="0 0 800 220" role="img" aria-label="Prediction, reading and combined estimate at the chosen step"></svg>
+      <p class="status" id="st1b" role="status" aria-live="polite"></p>
+    </div>
+    <details>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-1"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-speed">
+    <h2 id="h-speed">A hidden speed</h2>
+    <p>Now something moves steadily, say a car on a road, and the sensor reports only its position. The filter above has no idea about speed. Each step it predicts &ldquo;it is where it was&rdquo;, and each reading has to drag it forwards, so it always runs behind a steadily moving thing.</p>
+    <p>The remedy is to track speed as well, even though it is never measured. The state is now a position and a speed. Predicting moves the position on by the speed. Because position and speed are uncertain <em>together</em>, the filter keeps a small table of how they vary: the variance of the position, of the speed, and how the two move together, called the <em>covariance</em>. When a reading says the car is further along than predicted, the covariance is what lets the filter conclude that the speed was probably higher than it thought, and revise the speed too. Speed is learned from positions alone.</p>
+    <p>Below, the dashed magenta line is the filter with a speed. The blue line is the filter without one, from above. You can also make the car change speed half way through.</p>
+    <div class="panel">
+      <div class="sliders">
+        <label class="field"><span class="lab" id="lab-n2">How noisy the sensor really is (both filters believe this): <span id="v-n2"></span></span><input type="range" id="n2" min="1" max="15" step="1" aria-labelledby="lab-n2"></label>
+        <label class="field"><span class="lab" id="lab-q2">Wander allowed for the filter without speed: <span id="v-q2"></span></span><input type="range" id="q2" min="0.1" max="5" step="0.1" aria-labelledby="lab-q2"></label>
+        <label class="field"><span class="lab" id="lab-a2">Speed change allowed for the filter with speed: <span id="v-a2"></span></span><input type="range" id="a2" min="0.01" max="1" step="0.01" aria-labelledby="lab-a2"></label>
+      </div>
+      <div class="row"><label class="check"><input type="checkbox" id="turn2"> The car changes speed half way</label><button class="btn" type="button" id="new2">New noise</button></div>
+      <svg class="chart" id="chart2" viewBox="0 0 800 280" role="img" aria-label="The true path, readings, the filter without speed and the filter with speed"></svg>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="0 0 28 10"><line x1="0" y1="5" x2="28" y2="5" style="stroke:var(--c-true);stroke-width:4;opacity:.55"/></svg>Truth (hidden)</span>
+        <span><svg viewBox="0 0 28 10"><circle cx="14" cy="5" r="3.5" style="fill:var(--c-read)"/></svg>Readings</span>
+        <span><svg viewBox="0 0 28 10"><line x1="0" y1="5" x2="28" y2="5" style="stroke:var(--c-post);stroke-width:2.5"/></svg>Without speed</span>
+        <span><svg viewBox="0 0 28 10"><line x1="0" y1="5" x2="28" y2="5" style="stroke:var(--c-alt);stroke-width:2.5;stroke-dasharray:7 4"/></svg>With speed</span>
+      </div>
+      <div class="readout">
+        <div><span class="k">Typical error: readings</span><span class="v" id="e2-raw">0</span></div>
+        <div><span class="k">Typical error: without speed</span><span class="v" id="e2-a">0</span></div>
+        <div><span class="k">Typical error: with speed</span><span class="v" id="e2-b">0</span></div>
+        <div><span class="k">Speed estimated at the end</span><span class="v" id="e2-v">0</span></div>
+        <div><span class="k">True speed at the end</span><span class="v" id="e2-tv">0</span></div>
+      </div>
+      <p class="status" id="st2" role="status" aria-live="polite"></p>
+    </div>
+    <p>Raise the wander allowance for the filter without speed and its lag shrinks, but its estimate gets noisier, because it now believes the readings more. The filter with speed does not need that trade. Try the speed change as well: the filter with speed overshoots briefly and then adjusts, and how fast it adjusts is set by the speed-change allowance.</p>
+    <details>
+      <summary>The code for the two-part state (also what this page runs)</summary>
+      <div class="stack" id="code-2"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-parts">
+    <h2 id="h-parts">The parts you can swap</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
+        <tbody>
+          <tr><td>The state</td><td>Position; position and speed; position, speed and heading; a robot and its landmarks</td><td>What the filter can infer without being told. A hidden quantity can be learned if it affects what the sensors see.</td></tr>
+          <tr><td>The motion model</td><td>Stays put, moves at constant speed, follows a known command</td><td>What the predict step does. A wrong model shows up as lag or overshoot.</td></tr>
+          <tr><td>The process noise</td><td>Small or large</td><td>How willing the filter is to believe the thing departed from the model. Small means smooth but slow.</td></tr>
+          <tr><td>The sensor noise</td><td>Small or large</td><td>How much each reading is believed. Small means responsive but jittery.</td></tr>
+          <tr><td>The sensors</td><td>One, or several fused together</td><td>Each reading is another update step. A sharper sensor narrows the estimate more.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-limits">
+    <h2 id="h-limits">What it assumes</h2>
+    <ul class="recap">
+      <li><strong>Everything is a bell curve.</strong> The filter describes its belief only by a centre and a spread. If the real uncertainty has two humps, such as &ldquo;it went left or right at the junction&rdquo;, one bell curve cannot hold it.</li>
+      <li><strong>The movement and the sensors are straight-line relationships.</strong> That is what keeps the sums this short. Turning, or a sensor that measures distance and angle, bends them, and needs the variants named below.</li>
+      <li><strong>You must tell it the noise levels.</strong> It does not find them out. Wrong numbers give the lag and jitter you saw above.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Extended and unscented Kalman filters</dt><dd>Ways to handle movements and sensors that are not straight-line relationships, by approximating them locally.</dd></div>
+      <div><dt>Particle filters</dt><dd>Hold the belief as a cloud of many possible states instead of one bell curve, so two-humped beliefs are fine.</dd></div>
+      <div><dt>Smoothing</dt><dd>Using later readings to improve the estimate of earlier moments. The filter here only ever looks back.</dd></div>
+      <div><dt>The original paper</dt><dd>Rudolf Kalman&rsquo;s 1960 paper on linear filtering and prediction. The method has been widely used in navigation and tracking since.</dd></div>
+      <div><dt>The same shape elsewhere</dt><dd>A chain of noisy clues, with a summary carried forward at each step, is also the story of <a href="../viterbi/">The most likely story</a>, where the hidden states are a few discrete weathers instead of a smooth quantity.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>A guess with an uncertainty is a bell curve. Combining two weights each by how certain it is, and the result is more certain than either.</li>
+      <li>The filter repeats predict, which grows the uncertainty, and update, which shrinks it.</li>
+      <li>How much to believe a reading is the gain K, set by the two variances.</li>
+      <li>The noise levels you give the filter decide its behaviour: too trusting is jittery, too doubtful is late.</li>
+      <li>Adding a hidden speed lets the filter follow steady movement without lag, learning the speed from positions alone.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; return e; };
+
+  /* ---------- the filter (displayed and run as written) ---------- */
+  const predict = (belief, wander) => ({
+    mean: belief.mean,                       // no better guess than where it was
+    variance: belief.variance + wander       // but it may have moved, so we are less sure
+  });
+
+  const update = (belief, reading, noise) => {
+    const gain = belief.variance / (belief.variance + noise);
+    return {
+      mean: belief.mean + gain * (reading - belief.mean),
+      variance: (1 - gain) * belief.variance,
+      gain
+    };
+  };
+
+  const predictMoving = (s, accel) => {
+    // state: position p, speed v, and how they vary together (Ppp, Ppv, Pvv)
+    const Ppp = s.Ppp + 2 * s.Ppv + s.Pvv + accel / 4;
+    const Ppv = s.Ppv + s.Pvv + accel / 2;
+    const Pvv = s.Pvv + accel;
+    return { p: s.p + s.v, v: s.v, Ppp, Ppv, Pvv };            // position moves on by the speed
+  };
+
+  const updateMoving = (s, reading, noise) => {
+    const gainP = s.Ppp / (s.Ppp + noise);                      // how far to move the position
+    const gainV = s.Ppv / (s.Ppp + noise);                      // how far to move the speed
+    const gap = reading - s.p;
+    return {
+      p: s.p + gainP * gap,
+      v: s.v + gainV * gap,                                     // speed is learned from position alone
+      Ppp: (1 - gainP) * s.Ppp,
+      Ppv: (1 - gainP) * s.Ppv,
+      Pvv: s.Pvv - gainV * s.Ppv
+    };
+  };
+
+  /* ---------- helpers that are not part of the idea ---------- */
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|else|new|null|true|false|while)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  const showCode = (id, items) => items.forEach(([name, fn, tag]) => {
+    const d = el('div', 'fn');
+    d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+    d.appendChild(codeBlock('const ' + name + ' = ' + dedent(fn.toString())));
+    $(id).appendChild(d);
+  });
+  showCode('code-1', [['predict', predict, 'time passes, so we are less sure'], ['update', update, 'a reading arrives, so we are more sure']]);
+  showCode('code-2', [['predictMoving', predictMoving, 'carry the position on by the speed'], ['updateMoving', updateMoving, 'one reading corrects position and speed']]);
+
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const normal = (rand) => Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
+  const N = 80;
+  const rmse = (a, b) => Math.sqrt(a.reduce((s, x, i) => s + (x - b[i]) ** 2, 0) / a.length);
+  const f1 = (x) => x.toFixed(1);
+
+  /* bell curves */
+  function bells(svg, curves, lo, hi, opts) {
+    const W = 800, H = +svg.getAttribute('viewBox').split(' ')[3], L = 30, R = 20, T = 28, B = 30;
+    svg.textContent = '';
+    const X = (x) => L + ((x - lo) / (hi - lo)) * (W - L - R);
+    const dens = (c, x) => Math.exp(-((x - c.mean) ** 2) / (2 * c.variance)) / Math.sqrt(2 * Math.PI * c.variance);
+    const peak = Math.max(...curves.map((c) => dens(c, c.mean)));
+    const Y = (d) => H - B - (d / peak) * (H - B - T);
+    for (let v = Math.ceil(lo / 10) * 10; v <= hi; v += 10) {
+      svg.appendChild(mk('line', { x1: X(v), x2: X(v), y1: T - 8, y2: H - B, class: 'grid' }));
+      svg.appendChild(mk('text', { x: X(v), y: H - 10, 'text-anchor': 'middle' }, String(v)));
+    }
+    curves.forEach((c) => {
+      let d = '';
+      for (let i = 0; i <= 160; i++) { const x = lo + ((hi - lo) * i) / 160; d += (i ? ' L' : 'M') + X(x).toFixed(1) + ' ' + Y(dens(c, x)).toFixed(1); }
+      svg.appendChild(mk('path', { d: d + ' L' + X(hi) + ' ' + Y(0) + ' L' + X(lo) + ' ' + Y(0) + ' Z', class: 'a-' + c.kind }));
+      svg.appendChild(mk('path', { d, class: 'l-' + c.kind }));
+      const right = c.kind === 'read';   // keep the labels apart when the peaks are close
+      svg.appendChild(mk('text', { x: X(c.mean) + (right ? 12 : 0), y: Y(dens(c, c.mean)) - 6 + (right ? 14 : 0), 'text-anchor': right ? 'start' : 'middle', class: c.tag }, c.label));
+    });
+  }
+
+  /* line chart */
+  function lines(svg, spec) {
+    const W = 800, H = 280, L = 34, R = 14, T = 12, B = 26;
+    svg.textContent = '';
+    const X = (i) => L + (i / (N - 1)) * (W - L - R), Y = (v) => H - B - ((v - spec.lo) / (spec.hi - spec.lo)) * (H - B - T);
+    for (let v = spec.lo; v <= spec.hi; v += spec.stepY) {
+      svg.appendChild(mk('line', { x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: 'grid' }));
+      svg.appendChild(mk('text', { x: L - 6, y: Y(v) + 4, 'text-anchor': 'end' }, String(v)));
+    }
+    [0, 20, 40, 60, 79].forEach((i) => svg.appendChild(mk('text', { x: X(i), y: H - 8, 'text-anchor': 'middle' }, String(i))));
+    const poly = (arr) => arr.map((v, i) => X(i).toFixed(1) + ',' + Y(v).toFixed(1)).join(' ');
+    if (spec.band) svg.appendChild(mk('polygon', { class: 's-band', points: poly(spec.band[0]) + ' ' + spec.band[1].map((v, i) => [X(i), Y(v)]).reverse().map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ') }));
+    spec.series.forEach(([cls, arr]) => svg.appendChild(mk('polyline', { class: cls, points: poly(arr) })));
+    spec.readings.forEach((v, i) => svg.appendChild(mk('circle', { cx: X(i), cy: Y(v), r: 3, class: 's-read' })));
+    if (spec.cursor != null) svg.appendChild(mk('line', { x1: X(spec.cursor), x2: X(spec.cursor), y1: T, y2: H - B, class: 'cursor' }));
+  }
+
+  /* ---------- section 1: two guesses ---------- */
+  const S1 = { pm: 40, ps: 12, rm: 60, rs: 6 };
+  function drawTwo() {
+    $('v-pm').textContent = S1.pm; $('v-ps').textContent = S1.ps; $('v-rm').textContent = S1.rm; $('v-rs').textContent = S1.rs;
+    const pred = { mean: S1.pm, variance: S1.ps ** 2 }, post = update(pred, S1.rm, S1.rs ** 2);
+    bells($('bells1'), [
+      { ...pred, kind: 'pred', tag: 'tag-pred', label: 'Prediction' },
+      { mean: S1.rm, variance: S1.rs ** 2, kind: 'read', tag: 'tag-read', label: 'Reading' },
+      { ...post, kind: 'post', tag: 'tag-post', label: 'Combined' }
+    ], -10, 110);
+    $('o-k').textContent = post.gain.toFixed(2); $('o-m').textContent = f1(post.mean); $('o-s').textContent = f1(Math.sqrt(post.variance));
+    $('o-status').textContent = 'The gain is ' + post.gain.toFixed(2) + ', so the combined estimate moves ' + Math.round(post.gain * 100) + '% of the way from the prediction to the reading, landing at ' + f1(post.mean) + '. Its spread is ' + f1(Math.sqrt(post.variance)) + ', narrower than both ' + S1.ps + ' and ' + S1.rs + '.';
+  }
+  ['pm', 'ps', 'rm', 'rs'].forEach((k) => { $(k).value = S1[k]; $(k).addEventListener('input', () => { S1[k] = +$(k).value; drawTwo(); }); });
+
+  /* ---------- section 2: the loop ---------- */
+  let seed1 = 11;
+  const S2 = { noise: 8, assumed: 8, wander: 1.5, t: 40 };
+  const truth1 = Array.from({ length: N }, (_, i) => 50 + 22 * Math.sin(i / 18));
+  function runScalar(readings, wander, noise) {
+    let b = { mean: readings[0], variance: noise };
+    const est = [b.mean], vr = [b.variance], pri = [b], gain = [1];
+    for (let i = 1; i < readings.length; i++) {
+      const pr = predict(b, wander);
+      b = update(pr, readings[i], noise);
+      est.push(b.mean); vr.push(b.variance); pri.push(pr); gain.push(b.gain);
+    }
+    return { est, vr, pri, gain };
+  }
+  function drawLoop() {
+    $('v-n1').textContent = S2.noise; $('v-r1').textContent = S2.assumed; $('v-q1').textContent = S2.wander.toFixed(1);
+    const rand = mulberry32(seed1);
+    const readings = truth1.map((v) => v + S2.noise * normal(rand));
+    const run = runScalar(readings, S2.wander ** 2, S2.assumed ** 2);
+    const avg = readings.map((_, i) => { const w = readings.slice(Math.max(0, i - 4), i + 1); return w.reduce((a, b) => a + b, 0) / w.length; });
+    const sd = run.vr.map(Math.sqrt);
+    lines($('chart1'), { lo: 0, hi: 100, stepY: 25, readings, series: [['s-true', truth1], ['s-avg', avg], ['s-est', run.est]], band: [run.est.map((v, i) => v + sd[i]), run.est.map((v, i) => v - sd[i])], cursor: S2.t });
+    $('e1-raw').textContent = f1(rmse(readings, truth1)); $('e1-kf').textContent = f1(rmse(run.est, truth1)); $('e1-avg').textContent = f1(rmse(avg, truth1)); $('e1-k').textContent = run.gain[N - 1].toFixed(2);
+    const kf = rmse(run.est, truth1), rw = rmse(readings, truth1);
+    $('st1').textContent = 'The filter is off by ' + f1(kf) + ' on average against ' + f1(rw) + ' for the raw readings. ' + (S2.assumed < S2.noise - 2 ? 'It believes the sensor is better than it is, so it chases the noise.' : S2.assumed > S2.noise + 2 ? 'It doubts the sensor more than it should, so it lags behind the path.' : 'Its belief about the sensor is close to the truth.');
+    // one step
+    $('v-t1').textContent = S2.t;
+    const t = S2.t, pr = run.pri[t], po = { mean: run.est[t], variance: run.vr[t] };
+    const lo = Math.min(pr.mean - 3.5 * Math.sqrt(pr.variance), readings[t] - 3.5 * S2.assumed, po.mean - 20), hi = Math.max(pr.mean + 3.5 * Math.sqrt(pr.variance), readings[t] + 3.5 * S2.assumed, po.mean + 20);
+    bells($('bells2'), [
+      { ...pr, kind: 'pred', tag: 'tag-pred', label: 'Predicted' },
+      { mean: readings[t], variance: S2.assumed ** 2, kind: 'read', tag: 'tag-read', label: 'Reading' },
+      { ...po, kind: 'post', tag: 'tag-post', label: 'Estimate' }
+    ], Math.floor(lo / 10) * 10, Math.ceil(hi / 10) * 10);
+    $('st1b').textContent = 'At step ' + t + ' the filter predicted ' + f1(pr.mean) + ' (spread ' + f1(Math.sqrt(pr.variance)) + '). The reading was ' + f1(readings[t]) + '. With gain ' + run.gain[t].toFixed(2) + ' the estimate is ' + f1(po.mean) + ', and the true position was ' + f1(truth1[t]) + '.';
+  }
+  [['n1', 'noise'], ['r1', 'assumed'], ['q1', 'wander']].forEach(([id, k]) => { $(id).value = S2[k]; $(id).addEventListener('input', () => { S2[k] = +$(id).value; drawLoop(); }); });
+  $('t1').value = S2.t; $('t1').addEventListener('input', () => { S2.t = +$('t1').value; drawLoop(); });
+  $('new1').addEventListener('click', () => { seed1 += 7; drawLoop(); });
+  $('match1').addEventListener('click', () => { S2.assumed = S2.noise; $('r1').value = S2.noise; drawLoop(); });
+
+  /* ---------- section 3: a hidden speed ---------- */
+  let seed2 = 5;
+  const S3 = { noise: 8, wander: 1, accel: 0.2, turn: false };
+  function truth2() {
+    const out = [10]; let v = 1;
+    for (let i = 1; i < N; i++) { if (S3.turn && i === 40) v = -0.6; out.push(out[i - 1] + v); }
+    return { path: out, speed: (S3.turn ? -0.6 : 1) };
+  }
+  function drawSpeed() {
+    $('v-n2').textContent = S3.noise; $('v-q2').textContent = S3.wander.toFixed(1); $('v-a2').textContent = S3.accel.toFixed(2);
+    const tr = truth2(), rand = mulberry32(seed2), readings = tr.path.map((v) => v + S3.noise * normal(rand));
+    const a = runScalar(readings, S3.wander ** 2, S3.noise ** 2);
+    let s = { p: readings[0], v: 0, Ppp: S3.noise ** 2, Ppv: 0, Pvv: 4 };
+    const bp = [s.p], bv = [s.v];
+    for (let i = 1; i < N; i++) { s = updateMoving(predictMoving(s, S3.accel ** 2), readings[i], S3.noise ** 2); bp.push(s.p); bv.push(s.v); }
+    lines($('chart2'), { lo: 0, hi: 100, stepY: 25, readings, series: [['s-true', tr.path], ['s-est', a.est], ['s-alt', bp]] });
+    const ra = rmse(a.est, tr.path), rb = rmse(bp, tr.path);
+    $('e2-raw').textContent = f1(rmse(readings, tr.path)); $('e2-a').textContent = f1(ra); $('e2-b').textContent = f1(rb);
+    $('e2-v').textContent = bv[N - 1].toFixed(2); $('e2-tv').textContent = tr.speed.toFixed(2);
+    $('st2').textContent = 'Without a speed the filter is off by ' + f1(ra) + ' on average. With one it is off by ' + f1(rb) + '. It was never told the speed, and by the end it estimates ' + bv[N - 1].toFixed(2) + ' against a true ' + tr.speed.toFixed(2) + '.' + (rb > ra ? ' With these settings the filter with speed does worse, so try the wander allowances.' : '');
+  }
+  [['n2', 'noise'], ['q2', 'wander'], ['a2', 'accel']].forEach(([id, k]) => { $(id).value = S3[k]; $(id).addEventListener('input', () => { S3[k] = +$(id).value; drawSpeed(); }); });
+  $('turn2').addEventListener('change', () => { S3.turn = $('turn2').checked; drawSpeed(); });
+  $('new2').addEventListener('click', () => { seed2 += 7; drawSpeed(); });
+
+  drawTwo(); drawLoop(); drawSpeed();
+})();
+</script>
+</body>
+</html>
