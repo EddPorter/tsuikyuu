@@ -166,9 +166,13 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       <div><dt>Any later cell</dt><dd>For each weather the day before, take its cell, multiply by the chance of moving from it to this weather, and keep the best. Remember which one won. Then multiply by the chance of this day&rsquo;s clue.</dd></div>
       <div><dt>The answer</dt><dd>The largest cell in the last column. Follow the remembered choices back, column by column, to read off the whole story.</dd></div>
     </dl>
-    <p>Move the slider to fill the grid a column at a time. Click a cell to see the sums behind it.</p>
+    <p>Press &ldquo;Fill next cell&rdquo; to fill the grid one cell at a time, going down each column in turn. The table underneath shows the sums behind the cell just filled. You can click any filled cell to see its sums instead.</p>
     <div class="panel">
-      <label class="field"><span class="lab" id="lab-t">Columns filled</span><input type="range" id="cols" min="1" max="7" value="1" aria-labelledby="lab-t"></label>
+      <div class="row">
+        <button class="btn primary" type="button" id="g-step">Fill next cell</button>
+        <button class="btn" type="button" id="g-all">Fill the lot</button>
+        <button class="btn" type="button" id="g-reset">Start again</button>
+      </div>
       <div class="gridwrap"><table class="tr" id="trellis"></table></div>
       <div class="tablewrap"><table class="plain" id="detail"></table></div>
       <p class="status" id="grid-status" role="status" aria-live="polite"></p>
@@ -348,7 +352,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       : 'The most likely whole story has chance ' + fmt(v.probability) + '. Guessing each day alone gives a story with chance ' + fmt(pg) + '. The best story is ' + (pg > 0 ? 'about ' + (v.probability / pg).toFixed(1) + ' times as likely.' : 'possible, and the other is impossible under this model.');
     if (!same && pg > v.probability * 1.000001) $('story-status').textContent += ' (That should not happen.)';
     // the grid
-    const cols = $('cols'); cols.max = days.length; if (+cols.value > days.length) cols.value = days.length;
+    filled = Math.min(filled, days.length * m.states.length);
     drawGrid(v, m);
     // the check
     if (days.length <= 12) {
@@ -358,17 +362,20 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       $('check-status').textContent = 'Scoring all ' + count.toLocaleString('en-GB') + ' possible stories finds a best chance of ' + fmt(top) + '. The grid found ' + fmt(v.probability) + '. ' + (ok ? 'They agree, and the grid needed only ' + (days.length * 2) + ' cells.' : 'They disagree, which should not happen.');
     } else $('check-status').textContent = 'Too many days to score every story. Use twelve or fewer to see the check.';
   }
+  let filled = 6;
   function drawGrid(v, m) {
-    const n = +$('cols').value, tbl = $('trellis'); tbl.textContent = '';
+    const ns = m.states.length, total = days.length * ns, tbl = $('trellis'); tbl.textContent = '';
+    const done = filled === total, cellNo = (t, s) => t * ns + m.states.indexOf(s);
+    if (filled > 0 && (!sel || cellNo(sel.t, sel.s) >= filled)) { const c = filled - 1, t = Math.floor(c / ns); sel = { t, s: done ? v.path[t] : m.states[c % ns] }; }
+    if (filled === 0) sel = null;
     const head = el('tr'); head.appendChild(el('th'));
     days.forEach((a, t) => head.appendChild(el('th', null, 'Day ' + (t + 1) + ': ' + ACT[a])));
     const th = el('thead'); th.appendChild(head); tbl.appendChild(th);
-    const body = el('tbody'), done = n === days.length;
-    if (!sel || sel.t >= n) sel = { t: n - 1, s: v.path[n - 1] };
+    const body = el('tbody');
     m.states.forEach((s) => {
       const tr = el('tr'); tr.appendChild(el('th', null, NAME[s]));
       days.forEach((a, t) => {
-        const shown = t < n;
+        const shown = cellNo(t, s) < filled;
         const td = el('td', shown ? (done && v.path[t] === s ? 'path' : '') : 'blank');
         td.textContent = shown ? fmt(v.best[t][s]) : '·';
         if (shown && t > 0) td.appendChild(el('small', null, 'from ' + NAME[v.from[t][s]].toLowerCase()));
@@ -379,8 +386,10 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       body.appendChild(tr);
     });
     tbl.appendChild(body);
+    $('g-step').disabled = done; 
     // detail of the selected cell
     const d = $('detail'); d.textContent = '';
+    if (!sel) { $('grid-status').textContent = 'The grid is empty. Press “Fill next cell” to work out the first cell, day 1 with rain.'; return; }
     const { t, s } = sel, o = days[t];
     if (t === 0) {
       d.innerHTML = '<thead><tr><th>Day 1, ' + NAME[s].toLowerCase() + '</th><th class="num">Chance</th></tr></thead>';
@@ -394,24 +403,27 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       const r = el('tr'); r.append(el('td', null, 'Best product, times the chance of “' + ACT[o] + '” from ' + NAME[s].toLowerCase() + ' (' + fmt(m.emit[s][o]) + ')'), el('td'), el('td'), el('td', 'num', fmt(v.best[t][s])));
       b.appendChild(r); d.appendChild(b);
     }
+    const latest = filled - 1, lt = Math.floor(latest / ns), ls = m.states[latest % ns];
     $('grid-status').textContent = done
       ? 'The grid is full. The largest cell in the last column is ' + fmt(v.probability) + ', for ' + NAME[v.path[v.path.length - 1]].toLowerCase() + '. Following the “from” notes back from there gives the highlighted path: ' + v.path.map((x) => NAME[x].toLowerCase()).join(', ') + '.'
-      : 'Columns 1 to ' + n + ' are filled. Move the slider to fill more, and click any cell to see its sums.';
+      : 'Filled ' + filled + ' of ' + total + ' cells. The last one filled is day ' + (lt + 1) + ', ' + NAME[ls].toLowerCase() + '. The table shows how its number was made.' + (sel.t === lt && sel.s === ls ? '' : ' You are looking at the cell you clicked.');
   }
 
   /* ---------- wiring ---------- */
   PRESETS.forEach(([label, ds, r, s]) => {
     const b = el('button', 'btn small', label); b.type = 'button';
-    b.addEventListener('click', () => { days = ds.slice(); stayR = r; stayS = s; $('stay-r').value = r; $('stay-s').value = s; sel = null; $('cols').value = days.length; drawDays(); redraw(); });
+    b.addEventListener('click', () => { days = ds.slice(); stayR = r; stayS = s; $('stay-r').value = r; $('stay-s').value = s; sel = null; filled = days.length * 2; drawDays(); redraw(); });
     $('presets').appendChild(b);
   });
   $('add').addEventListener('click', () => { days.push('walk'); sel = null; drawDays(); redraw(); });
   $('drop').addEventListener('click', () => { days.pop(); sel = null; drawDays(); redraw(); });
   $('stay-r').addEventListener('input', () => { stayR = +$('stay-r').value; redraw(); });
   $('stay-s').addEventListener('input', () => { stayS = +$('stay-s').value; redraw(); });
-  $('cols').addEventListener('input', () => { sel = null; redraw(); });
+  $('g-step').addEventListener('click', () => { filled++; sel = null; redraw(); });
+  $('g-all').addEventListener('click', () => { filled = days.length * 2; sel = null; redraw(); });
+  $('g-reset').addEventListener('click', () => { filled = 0; sel = null; redraw(); });
   $('stay-r').value = stayR; $('stay-s').value = stayS;
-  drawDays(); $('cols').max = days.length; $('cols').value = 3; redraw();
+  drawDays(); redraw();
 })();
 </script>
 </body>
