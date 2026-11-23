@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Reaching The Target</title>
+<meta name="description" content="An interactive explainer of the numbers game from the quiz show Countdown: reaching a target from six numbers with the four operations, by brute force and by remembering what every subset of the numbers can make.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: one reading column that builds the idea in stages, each ending in a small workbench you can poke. */
+:root {
+  --bg: #eceff2; --surface: #fbfcfd; --cell: #f0f3f5; --ink: #16212b; --muted: #55646f; --line: #cdd5dc;
+  --accent: #2b2bd6; --accent-soft: #e3e3fb; --on-accent: #ffffff; --good: #1d6f3d; --good-bg: #dff3e5; --warn: #946200; --warn-bg: #fbecc4;
+  --code-bg: #15222c; --code-ink: #d8e2ea; --code-cm: #7f93a3; --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+    --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --good: #6fd78f; --good-bg: #17301f; --warn: #f0c25a; --warn-bg: #46380f; --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+  --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a; --good: #6fd78f; --good-bg: #17301f; --warn: #f0c25a; --warn-bg: #46380f; --code-bg: #0b1117;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+h3 { font-size: 1.15rem; font-weight: 700; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; max-width: 65ch; }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 7px 14px; font-size: 14px; cursor: pointer; border-right: 1px solid var(--line); user-select: none; }
+.seg label:last-of-type { border-right: 0; }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.status { min-height: 2.4em; font-weight: 500; }
+.tiles { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.tile { display: flex; flex-direction: column; gap: 4px; }
+.tile input { width: 78px; font: inherit; font-family: var(--font-mono); font-size: 18px; font-weight: 700; text-align: center; padding: 8px 4px; border: 2px solid var(--line); border-radius: 8px; background: var(--cell); color: var(--ink); }
+.tile.large input { border-color: var(--accent); background: var(--accent-soft); }
+.tile.target input { width: 100px; border-color: var(--ink); }
+.tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); text-align: center; }
+.result { border: 2px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; background: var(--cell); }
+.result.exact { border-color: var(--good); background: var(--good-bg); }
+.result.close { border-color: var(--warn); background: var(--warn-bg); }
+.result .big { font-family: var(--font-mono); font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+.result ol { margin: 0; padding-left: 1.4em; font-family: var(--font-mono); font-size: 14px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14px; }
+th, td { text-align: left; padding: 7px 12px; vertical-align: middle; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: inherit; font-family: var(--font-mono); font-size: 16px; font-weight: 700; min-width: 56px; padding: 8px 10px; border-radius: 8px; border: 2px solid var(--line); background: var(--cell); color: var(--muted); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.values { display: flex; flex-wrap: wrap; gap: 4px 8px; font-family: var(--font-mono); font-size: 13px; max-height: 190px; overflow: auto; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); }
+.values span.hit { background: var(--good-bg); color: var(--good); font-weight: 700; border-radius: 3px; padding: 0 4px; outline: 2px solid var(--good); }
+svg.strip { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--cell); }
+svg.strip rect.yes { fill: var(--accent); }
+svg.strip rect.no { fill: none; stroke: var(--muted); stroke-width: 1; }
+svg.strip rect.now { stroke: var(--ink); stroke-width: 3; fill: var(--warn-bg); }
+svg.strip rect { cursor: pointer; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--muted); }
+.legend .l-yes::before { background: var(--accent); border-color: var(--accent); }
+.bar { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.bar i { display: block; height: 12px; background: var(--accent); border-radius: 2px; min-width: 2px; }
+.bar span { font-family: var(--font-mono); font-size: 13px; }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+ol.steps, ul.recap { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 70ch; }
+@media (max-width: 920px) { dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>Reaching the target</h1>
+    <p class="lead">The numbers round of a well-known quiz show gives you six numbers and a target, and asks you to reach the target with the four basic operations. People do it by feel in half a minute. A computer can do it by trying everything, but there is a much smaller way: remember what every <em>subset</em> of the numbers can make, and build the bigger subsets from the smaller ones. This page does both and counts the work.</p>
+  </header>
+
+  <section aria-labelledby="h-game">
+    <h2 id="h-game">The game</h2>
+    <p>These are the usual rules, and the ones this page uses:</p>
+    <ul class="recap">
+      <li>There are six number tiles. Some are <strong>large</strong> (25, 50, 75, 100, one of each in the pool) and the rest are <strong>small</strong> (1 to 10, two of each). The contestant chooses how many of the six come from the large tiles, from none to all four.</li>
+      <li>A target between 101 and 999 is chosen at random.</li>
+      <li>Combine the numbers with <code>+</code>, <code>&minus;</code>, <code>&times;</code> and <code>&divide;</code>, using brackets freely. Each number may be used at most once, and you need not use all six.</li>
+      <li>Every step must give a positive whole number. No fractions and no negatives, even part way.</li>
+    </ul>
+    <p>Pick the number of large tiles, or type your own numbers and target. The page solves it straight away, using the method described below.</p>
+    <div class="panel">
+      <div class="row">
+        <div class="field"><span class="lab" id="lab-large">How many large numbers</span><div class="seg" role="radiogroup" aria-labelledby="lab-large" id="seg-large"></div></div>
+        <button class="btn primary" type="button" id="draw">Draw numbers and a target</button>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div class="result" id="result" aria-live="polite"></div>
+    </div>
+    <p class="note">The solver only needs to find <em>a</em> way. When there are several, it shows one that uses the fewest numbers.</p>
+  </section>
+
+  <section aria-labelledby="h-brute">
+    <h2 id="h-brute">Trying everything</h2>
+    <p>The most direct method mirrors what a person does. Pick any two numbers from the list. Combine them with each operation that keeps a positive whole number. Replace the pair with the result, so the list is one shorter. Then do the same again on the shorter list, and so on until one number is left. Every value that turns up along the way is one you can reach. Click &ldquo;Count the work&rdquo; to run it for the first 3, 4, 5 and 6 of your numbers, next to the method in the rest of this page.</p>
+    <div class="panel">
+      <div class="row"><button class="btn primary" type="button" id="work-run">Count the work</button><span class="note" id="work-note"></span></div>
+      <div class="tablewrap"><table id="work"></table></div>
+      <p class="status" id="work-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>Both methods are counting <em>results of an arithmetic operation</em>. The times depend on your device. For six numbers, trying everything is not out of reach of a computer. It takes about a million and a half steps, which is a fraction of a second. But it is slow for a person, and it grows fast. Each extra number multiplies the work by something like 25 to 70. For the numbers 100, 75, 50, 25, 6, 3 and 2, I measured 104,034,868 operations for trying everything, about 15 seconds in a standard JavaScript runtime. The method below needed 1,801,236 for the same seven numbers, about 0.2 seconds. That is a 58-fold saving, up from about 12-fold at six numbers. I did not run trying everything at eight numbers, and would not expect it to finish quickly.</p>
+  </section>
+
+  <section aria-labelledby="h-overlap">
+    <h2 id="h-overlap">The same work, over and over</h2>
+    <p>Why is there so much work to save? Because different routes arrive at the same place. Take the numbers 100, 6, 75 and 3. You could add 100 and 6 first and then multiply 75 by 3. Or you could multiply 75 by 3 first, and then add 100 and 6. Both leave the same position, <code>106</code> and <code>225</code>, with whatever else was left. Trying everything cannot tell, so it goes on from that position twice, and works through everything that follows twice.</p>
+    <div class="panel">
+      <p class="status" id="overlap-status" role="status" aria-live="polite"></p>
+    </div>
+    <p>The remedy is to notice what matters. When two routes leave the same numbers, what happens next does not depend on the route. In fact it is more general than that: what a <em>group of numbers</em> can make does not depend on the order in which you combined them.</p>
+  </section>
+
+  <section aria-labelledby="h-dp">
+    <h2 id="h-dp">Remember what each subset can make</h2>
+    <p>Number the six tiles and think of every subset of them: 2<sup>6</sup> &minus; 1 = 63 non-empty ones. For each subset <var>S</var>, work out once <code>reach[S]</code>: <strong>every value you can make using exactly the numbers in <var>S</var></strong>.</p>
+    <dl class="lines">
+      <div><dt>A single number</dt><dd><code>reach</code> of a subset holding one number is just that number.</dd></div>
+      <div><dt>Two or more numbers</dt><dd>Any way of making a value from them ends with one last operation, joining a value made from one part of <var>S</var> with a value made from the rest. So split <var>S</var> into two non-empty parts <var>A</var> and <var>B</var> in every possible way. For every value <var>a</var> in <code>reach[A]</code> and every value <var>b</var> in <code>reach[B]</code>, put <var>a</var> and <var>b</var> through each operation, and add the results to <code>reach[S]</code>.</dd></div>
+      <div><dt>The order of work</dt><dd>Both parts are smaller than <var>S</var>, so if we deal with subsets from the smallest to the largest, <code>reach[A]</code> and <code>reach[B]</code> are always ready. This is the same dependence on smaller answers as the grids on <a href="../what-changed/">What changed?</a>.</dd></div>
+    </dl>
+    <p>Two things save the work. Each subset is worked out only once, however many orders could lead to it. And each <code>reach</code> is a <em>set</em>, so if two different routes make the same value from the same subset, we keep it once and carry on from it once. The answer to the game is whether the target appears in <code>reach[S]</code> for any subset <var>S</var>, since you do not have to use every number.</p>
+    <p>Choose a subset by clicking tiles. The page shows how many values it can make, how it was built from smaller subsets, and the values themselves, with the target highlighted if it is there.</p>
+    <div class="panel">
+      <div class="chips" id="pick" role="group" aria-label="Choose a subset of the numbers"></div>
+      <p class="status" id="sub-status" role="status" aria-live="polite"></p>
+      <div class="tablewrap"><table id="splits"></table></div>
+      <div class="values" id="vals" aria-label="Values this subset can make"></div>
+    </div>
+    <p>Here is the whole calculation for your numbers, by size of subset. The numbers of values grow quickly, but they are each stored once.</p>
+    <div class="tablewrap"><table id="layers"></table></div>
+    <details>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-cd"></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="h-answer">
+    <h2 id="h-answer">Reading the answer back</h2>
+    <p>Knowing a value is reachable is not yet an answer. You want the sum. So each value stored in <code>reach[S]</code> also keeps a note of how it was first made: the operation, the two values joined, and which subsets they came from. To show a solution, start at the target, look up its note, and do the same for each of the two values it was joined from, until you reach numbers that were on the tiles. That is the same trick as walking back through the grids on <a href="../what-changed/">What changed?</a>, and it is how the result above is written out as a list of steps and as one line with brackets.</p>
+    <p>The strip below has a square for each possible target from 101 to 999. A filled square is a target your six numbers can reach exactly. Click any square to make it the target.</p>
+    <div class="panel">
+      <svg class="strip" id="strip" viewBox="0 0 800 220" role="img" aria-label="Targets from 101 to 999, filled when reachable"></svg>
+      <div class="legend" aria-hidden="true"><span class="l-yes">reachable exactly</span><span>not reachable</span></div>
+      <p class="status" id="strip-status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-split">
+    <h2 id="h-split">Which split is best?</h2>
+    <p>The contestant chooses how many numbers come from the large tiles, so it is fair to ask whether the choice matters. With the method above it is cheap to find out. Click the button, and the page deals many random sets of tiles for each split, as the show does, without putting tiles back. For each set it works out the share of targets from 101 to 999 that are reachable.</p>
+    <div class="panel">
+      <div class="row"><button class="btn primary" type="button" id="cmp-run">Compare the splits</button><span class="note" id="cmp-note"></span></div>
+      <div class="tablewrap"><table id="cmp"></table></div>
+      <p class="status" id="cmp-status" role="status" aria-live="polite"></p>
+    </div>
+    <p class="note">It is a sample of random sets. A bigger sample would move the numbers a little, and the same seeds are used each time, so you will see the same result on every run. &ldquo;Reachable&rdquo; means exactly reachable. In the game, getting close also scores.</p>
+  </section>
+
+  <section aria-labelledby="h-parts">
+    <h2 id="h-parts">The parts you can swap</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
+        <tbody>
+          <tr><td>The rules for in-between values</td><td>Positive whole numbers only; allow fractions; allow negatives</td><td>What is reachable. Fractions make many more targets reachable, but need exact fractions in the arithmetic, not decimals.</td></tr>
+          <tr><td>The numbers</td><td>Six tiles, or more, or a fixed list</td><td>The work, which grows quickly with the count. Eight numbers already needs millions of stored values.</td></tr>
+          <tr><td>Must every number be used</td><td>No, or yes</td><td>Whether the answer is read from any subset or only from the full one.</td></tr>
+          <tr><td>Which solution to show</td><td>Fewest numbers, fewest operations, no brackets, the simplest to do in your head</td><td>Only the note kept with each value. The sets themselves do not change.</td></tr>
+          <tr><td>Skipping pointless steps</td><td>Skip multiplying or dividing by 1</td><td>Fewer operations tried. It cannot change which targets are reachable, since you need not use every number.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-limits">
+    <h2 id="h-limits">What this leaves out</h2>
+    <ul class="recap">
+      <li><strong>It does not race the clock.</strong> The show gives a person about half a minute. This page is about how a computer can do it without trying everything.</li>
+      <li><strong>It does not pick the nicest answer.</strong> It shows the first way it found that uses the fewest numbers, which may not be the easiest to do in your head.</li>
+      <li><strong>The sets get large.</strong> For six numbers the stored values number in the tens of thousands, which is fine. The memory is what limits it as numbers are added, before the time does.</li>
+      <li><strong>Close answers.</strong> When the target is not reachable, the page shows the closest value it can reach. It does not model the show&rsquo;s scoring for near misses.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Bitmask dynamic programming</dt><dd>The name for what this page did: use a number whose binary digits say which items are in a subset, and make a table indexed by it. It is also used for problems such as the travelling salesman problem on a few dozen cities at most.</dd></div>
+      <div><dt>Matrix-chain and optimal bracketing</dt><dd>Another problem about choosing where to put brackets, solved by splitting a range in two in every way and remembering the best answer for each range.</dd></div>
+      <div><dt>Subset sum and knapsack</dt><dd>Related problems where you choose a subset of numbers to hit a total, with their own dynamic programs.</dd></div>
+      <div><dt>Related pages</dt><dd>Remembering answers to smaller questions, in a grid, is on <a href="../what-changed/">What changed?</a>. Choosing all the breaks of a paragraph together is on <a href="../line-breaking/">The whole paragraph</a>.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>Trying every way to combine pairs works, but different routes keep arriving at the same position and the work is repeated.</li>
+      <li>What a group of numbers can make does not depend on the order they were combined in, so work it out once for each subset.</li>
+      <li>A subset&rsquo;s values come from splitting it into two smaller subsets in every way and combining their values.</li>
+      <li>Keeping values in sets removes repeated values. A note with each value lets you read the sum back.</li>
+      <li>For six numbers the saving is about twelve times, for seven about fifty-eight. It grows with every number added.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; return e; };
+  const fmt = (n) => n.toLocaleString('en-GB');
+  const pause = () => new Promise((r) => setTimeout(r, 15));
+
+  /* ---------- the method (displayed and run as written) ---------- */
+  const combine = (a, b) => {
+    // every result of one operation between a and b that keeps a positive whole number
+    const out = [[a + b, '+', a, b, true], [a * b, '×', a, b, true]];
+    if (a > b) out.push([a - b, '−', a, b, true]);
+    if (b > a) out.push([b - a, '−', b, a, false]);
+    if (a % b === 0) out.push([a / b, '÷', a, b, true]);
+    if (b % a === 0 && a !== b) out.push([b / a, '÷', b, a, false]);
+    return out;
+  };
+
+  function bruteForce(numbers, found, count) {
+    for (const x of numbers) found.add(x);
+    for (let i = 0; i < numbers.length; i++) {
+      for (let j = i + 1; j < numbers.length; j++) {
+        const rest = numbers.filter((_, k) => k !== i && k !== j);
+        for (const [value] of combine(numbers[i], numbers[j])) {
+          count.operations++;
+          bruteForce([...rest, value], found, count);   // carry on with a list one shorter
+        }
+      }
+    }
+  }
+
+  const reachableBySubset = (numbers) => {
+    const n = numbers.length, reach = new Array(1 << n), work = { operations: 0 };
+    for (let S = 1; S < 1 << n; S++) {                  // smallest subsets first
+      reach[S] = new Map();                              // value -> how it was first made
+      if ((S & (S - 1)) === 0) { reach[S].set(numbers[31 - Math.clz32(S)], null); continue; }
+      const first = S & -S;                              // the lowest number in this subset
+      for (let A = (S - 1) & S; A > 0; A = (A - 1) & S) {   // every way to split S in two
+        if (!(A & first)) continue;                      // do each split once
+        const B = S ^ A;
+        for (const a of reach[A].keys()) {
+          for (const b of reach[B].keys()) {
+            for (const [value, op, left, right, leftIsA] of combine(a, b)) {
+              work.operations++;
+              if (!reach[S].has(value)) reach[S].set(value, { op, left, right, from: leftIsA ? [A, B] : [B, A] });
+            }
+          }
+        }
+      }
+    }
+    return { reach, work };
+  };
+
+  const explain = (reach, S, value) => {
+    // follow the notes back from a value to the numbers on the tiles
+    const how = reach[S].get(value);
+    if (!how) return { value };
+    return { value, op: how.op, left: explain(reach, how.from[0], how.left), right: explain(reach, how.from[1], how.right) };
+  };
+
+  /* ---------- helpers that are not part of the idea ---------- */
+  const PREC = { '+': 1, '−': 1, '×': 2, '÷': 2 };
+  const show = (t, parent = null, isRight = false) => {
+    if (!t.op) return String(t.value);
+    const text = show(t.left, t, false) + ' ' + t.op + ' ' + show(t.right, t, true);
+    const need = parent && (PREC[t.op] < PREC[parent.op] || (PREC[t.op] === PREC[parent.op] && isRight && (parent.op === '−' || parent.op === '÷')));
+    return need ? '(' + text + ')' : text;
+  };
+  const stepsOf = (t, out = []) => { if (t.op) { stepsOf(t.left, out); stepsOf(t.right, out); out.push(t.left.value + ' ' + t.op + ' ' + t.right.value + ' = ' + t.value); } return out; };
+  const popcount = (x) => { let c = 0; for (; x; x &= x - 1) c++; return c; };
+  const bitsOf = (S, n) => Array.from({ length: n }, (_, i) => i).filter((i) => S & (1 << i));
+
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|else|new|null|true|false|while|continue)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  [['combine', combine, 'one operation between two values', 'const'], ['bruteForce', bruteForce, 'try everything', 'function'], ['reachableBySubset', reachableBySubset, 'remember what each subset can make', 'const'], ['explain', explain, 'read a solution back', 'const']].forEach(([name, fn, tag, kind]) => {
+    const d = el('div', 'fn');
+    d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+    d.appendChild(codeBlock((kind === 'const' ? 'const ' + name + ' = ' : '') + dedent(fn.toString())));
+    $('code-cd').appendChild(d);
+  });
+
+  /* ---------- random sets of tiles ---------- */
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const LARGE = [25, 50, 75, 100], SMALL = [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10];
+  function dealTiles(rand, large) {
+    const take = (pool, k) => { const p = pool.slice(), out = []; for (let i = 0; i < k; i++) out.push(p.splice(Math.floor(rand() * p.length), 1)[0]); return out; };
+    return [...take(LARGE, large), ...take(SMALL, 6 - large)];
+  }
+
+  /* ---------- the game ---------- */
+  const G = { large: 2, nums: [25, 50, 75, 100, 3, 6], target: 952, seed: 1, mask: 7, R: null, best: null };
+  function analyse() {
+    const R = reachableBySubset(G.nums), best = new Map();
+    for (let S = 1; S < 1 << G.nums.length; S++) {
+      const size = popcount(S);
+      for (const v of R.reach[S].keys()) { const b = best.get(v); if (!b || size < b.size) best.set(v, { S, size }); }
+    }
+    G.R = R; G.best = best;
+  }
+  function solve() {
+    const { best, R } = G, t = G.target, box = $('result'); box.textContent = '';
+    box.className = 'result';
+    if (!(t >= 1)) { box.textContent = 'Type a target.'; return; }
+    let v = t, exact = best.has(t);
+    if (!exact) { let bd = Infinity; for (const x of best.keys()) { const d = Math.abs(x - t); if (d < bd || (d === bd && best.get(x).size < best.get(v === t ? x : v).size)) { bd = d; v = x; } } }
+    const tree = explain(R.reach, best.get(v).S, v);
+    box.classList.add(exact ? 'exact' : 'close');
+    box.appendChild(el('div', null, exact ? 'A way to make ' + t + ' exactly:' : 'No way to make ' + t + ' exactly from these numbers. The closest reachable value is ' + v + ', ' + Math.abs(v - t) + ' away:'));
+    box.appendChild(el('div', 'big', tree.op ? show(tree) + ' = ' + v : v + ' (a number on a tile)'));
+    const steps = stepsOf(tree);
+    if (steps.length) { const ol = el('ol'); steps.forEach((s) => ol.appendChild(el('li', null, s))); box.appendChild(ol); }
+    box.appendChild(el('div', 'note', 'Uses ' + best.get(v).size + ' of the ' + G.nums.length + ' numbers.'));
+  }
+  function drawTiles() {
+    const box = $('tiles'); box.textContent = '';
+    G.nums.forEach((n, i) => {
+      const t = el('label', 'tile' + (LARGE.includes(n) ? ' large' : ''));
+      const input = el('input'); input.type = 'number'; input.min = 1; input.max = 1000; input.value = n; input.setAttribute('aria-label', 'Number ' + (i + 1));
+      input.addEventListener('change', () => { const v = Math.max(1, Math.min(1000, Math.round(+input.value) || 1)); G.nums[i] = v; refresh(); });
+      t.append(input, el('span', 'k', LARGE.includes(n) ? 'large' : 'small')); box.appendChild(t);
+    });
+    const tt = el('label', 'tile target'), ti = el('input'); ti.type = 'number'; ti.min = 1; ti.max = 9999; ti.value = G.target; ti.setAttribute('aria-label', 'Target');
+    ti.addEventListener('change', () => { G.target = Math.max(1, Math.min(9999, Math.round(+ti.value) || 1)); solve(); drawStrip(); }); tt.append(ti, el('span', 'k', 'target')); box.appendChild(tt);
+  }
+  function newDraw() {
+    const rand = mulberry32(G.seed * 7919 + G.large);
+    G.nums = dealTiles(rand, G.large); G.target = 101 + Math.floor(rand() * 899); G.seed++; refresh();
+  }
+
+  /* ---------- what each subset can make ---------- */
+  function drawSubsets() {
+    const n = G.nums.length, pick = $('pick'); pick.textContent = '';
+    G.nums.forEach((x, i) => {
+      const b = el('button', 'chip', String(x)); b.type = 'button'; b.setAttribute('aria-pressed', String(!!(G.mask & (1 << i))));
+      b.addEventListener('click', () => { G.mask ^= 1 << i; if (!G.mask) G.mask = 1 << i; drawSubsets(); }); pick.appendChild(b);
+    });
+    const S = G.mask, reach = G.R.reach[S], idx = bitsOf(S, n), name = (m) => bitsOf(m, n).map((i) => G.nums[i]).join(', ');
+    $('sub-status').textContent = 'Using exactly ' + name(S) + ': ' + fmt(reach.size) + (reach.size === 1 ? ' value' : ' different values') + ' can be made. ' + (reach.has(G.target) ? 'The target, ' + G.target + ', is one of them.' : 'The target, ' + G.target + ', is not one of them.');
+    const tbl = $('splits'); tbl.textContent = '';
+    if (idx.length === 1) { tbl.innerHTML = '<thead><tr><th>A single number is its own answer</th></tr></thead>'; }
+    else {
+      tbl.innerHTML = '<thead><tr><th>Split into</th><th class="num">Values in the first part</th><th class="num">Values in the second part</th><th class="num">Pairs to combine</th></tr></thead>';
+      const body = el('tbody'); let total = 0; const first = S & -S;
+      for (let A = (S - 1) & S; A > 0; A = (A - 1) & S) {
+        if (!(A & first)) continue; const B = S ^ A, pairs = G.R.reach[A].size * G.R.reach[B].size; total += pairs;
+        const tr = el('tr'); tr.append(el('td', 'mono', '{' + name(A) + '}  and  {' + name(B) + '}'), el('td', 'num', fmt(G.R.reach[A].size)), el('td', 'num', fmt(G.R.reach[B].size)), el('td', 'num', fmt(pairs))); body.appendChild(tr);
+      }
+      const tr = el('tr'); tr.append(el('td', null, 'All splits'), el('td'), el('td'), el('td', 'num', fmt(total))); tr.style.fontWeight = '700'; body.appendChild(tr); tbl.appendChild(body);
+    }
+    const vals = $('vals'); vals.textContent = '';
+    const sorted = [...reach.keys()].sort((a, b) => a - b), shown = sorted.slice(0, 300);
+    shown.forEach((v) => vals.appendChild(el('span', v === G.target ? 'hit' : null, String(v))));
+    if (sorted.length > shown.length) vals.appendChild(el('span', 'note', '… and ' + fmt(sorted.length - shown.length) + ' more'));
+    if (reach.has(G.target) && !shown.includes(G.target)) vals.appendChild(el('span', 'hit', String(G.target)));
+  }
+  function drawLayers() {
+    const n = G.nums.length, tbl = $('layers'); tbl.textContent = '';
+    tbl.innerHTML = '<thead><tr><th class="num">Numbers in the subset</th><th class="num">Subsets</th><th class="num">Values stored</th></tr></thead>';
+    const body = el('tbody'), stored = new Array(n + 1).fill(0), subsets = new Array(n + 1).fill(0);
+    for (let S = 1; S < 1 << n; S++) { const k = popcount(S); subsets[k]++; stored[k] += G.R.reach[S].size; }
+    for (let k = 1; k <= n; k++) { const tr = el('tr'); tr.append(el('td', 'num', String(k)), el('td', 'num', String(subsets[k])), el('td', 'num', fmt(stored[k]))); body.appendChild(tr); }
+    const tr = el('tr'); tr.append(el('td', 'num', 'All'), el('td', 'num', String((1 << n) - 1)), el('td', 'num', fmt(stored.reduce((a, b) => a + b, 0)))); tr.style.fontWeight = '700'; body.appendChild(tr);
+    tbl.appendChild(body);
+  }
+
+  /* ---------- the strip of targets ---------- */
+  function drawStrip() {
+    const svg = $('strip'); svg.textContent = '';
+    const cols = 60, size = 13, gap = 0.7, x0 = 10, y0 = 10;
+    for (let t = 101; t <= 999; t++) {
+      const k = t - 101, r = mk('rect', { x: x0 + (k % cols) * (size + gap) , y: y0 + Math.floor(k / cols) * (size + gap), width: size, height: size, class: t === G.target ? 'now' : G.best.has(t) ? 'yes' : 'no' });
+      r.appendChild(mk('title', {}, t + (G.best.has(t) ? ': reachable' : ': not reachable')));
+      r.addEventListener('click', () => { G.target = t; drawTiles(); solve(); drawStrip(); }); svg.appendChild(r);
+    }
+    let count = 0; for (let t = 101; t <= 999; t++) if (G.best.has(t)) count++;
+    $('strip-status').textContent = 'These six numbers can make ' + count + ' of the 899 targets from 101 to 999 exactly (' + Math.round((count / 899) * 100) + '%). The outlined square is the current target, ' + G.target + (G.target >= 101 && G.target <= 999 ? (G.best.has(G.target) ? ', which is reachable.' : ', which is not reachable.') : ', which is outside this range.');
+  }
+
+  /* ---------- counting the work ---------- */
+  async function runWork() {
+    const run = $('work-run'); run.disabled = true;
+    const tbl = $('work'); tbl.innerHTML = '<thead><tr><th class="num">Numbers used</th><th class="num">Trying everything: operations</th><th class="num">Time</th><th class="num">By subset: operations</th><th class="num">Time</th><th class="num">Saving</th><th>Same values found?</th></tr></thead>';
+    const body = el('tbody'); tbl.appendChild(body); let allSame = true, last = null;
+    for (const n of [3, 4, 5, 6]) {
+      $('work-note').textContent = 'Working on ' + n + ' numbers…'; await pause();
+      const sub = G.nums.slice(0, n), found = new Set(), count = { operations: 0 };
+      let t0 = performance.now(); bruteForce(sub, found, count); const tb = performance.now() - t0;
+      t0 = performance.now(); const d = reachableBySubset(sub); const td = performance.now() - t0;
+      const union = new Set(); d.reach.forEach((m) => m && m.forEach((_, v) => union.add(v)));
+      const same = found.size === union.size && [...found].every((v) => union.has(v)); allSame = allSame && same; last = { count: count.operations, ops: d.work.operations };
+      const tr = el('tr'); tr.append(el('td', 'num', String(n)), el('td', 'num', fmt(count.operations)), el('td', 'num', tb.toFixed(0) + ' ms'), el('td', 'num', fmt(d.work.operations)), el('td', 'num', td.toFixed(0) + ' ms'), el('td', 'num', (count.operations / d.work.operations).toFixed(1) + '×'), el('td', null, same ? 'Yes, ' + fmt(found.size) + ' values' : 'No'));
+      body.appendChild(tr);
+    }
+    $('work-note').textContent = ''; run.disabled = false;
+    $('work-status').textContent = 'With six numbers, trying everything took ' + fmt(last.count) + ' operations, and the subset method ' + fmt(last.ops) + ': ' + (last.count / last.ops).toFixed(1) + ' times fewer. ' + (allSame ? 'Both found exactly the same set of values at every size.' : 'The two disagreed, which should not happen.');
+  }
+  function overlap() {
+    // how often the brute force arrives at a position it has already seen, with five numbers
+    const nums = G.nums.slice(0, 5), seen = new Map(); let calls = 0;
+    const go = (list) => { calls++; const key = list.slice().sort((a, b) => a - b).join(', '); seen.set(key, (seen.get(key) || 0) + 1);
+      for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) { const rest = list.filter((_, k) => k !== i && k !== j); for (const [v] of combine(list[i], list[j])) go([...rest, v]); } };
+    go(nums);
+    let top = null; for (const [k, c] of seen) if (k.split(', ').length === 3 && (!top || c > top[1])) top = [k, c];
+    $('overlap-status').textContent = 'With your first five numbers, trying everything visits ' + fmt(calls) + ' positions, but only ' + fmt(seen.size) + ' of them are different. ' + (top ? 'The most often repeated position with three numbers left, ' + top[0] + ', is reached ' + fmt(top[1]) + ' times, by different orders of the same operations.' : '');
+  }
+
+  /* ---------- comparing the splits ---------- */
+  async function runCompare() {
+    const run = $('cmp-run'); run.disabled = true; const DRAWS = 40, tbl = $('cmp');
+    tbl.innerHTML = '<thead><tr><th class="num">Large numbers</th><th>Average share of targets reachable</th><th class="num">Worst set</th><th class="num">Best set</th></tr></thead>';
+    const body = el('tbody'); tbl.appendChild(body); const results = [];
+    for (let large = 0; large <= 4; large++) {
+      const rand = mulberry32(1000 + large), shares = [];
+      for (let k = 0; k < DRAWS; k++) {
+        if (k % 5 === 0) { $('cmp-note').textContent = 'Working: ' + large + ' large numbers, set ' + (k + 1) + ' of ' + DRAWS + '…'; await pause(); }
+        const d = reachableBySubset(dealTiles(rand, large)), have = new Set(); d.reach.forEach((m) => m && m.forEach((_, v) => { if (v >= 101 && v <= 999) have.add(v); })); shares.push(have.size / 899);
+      }
+      const mean = shares.reduce((a, b) => a + b, 0) / shares.length; results.push({ large, mean });
+      const tr = el('tr'); tr.append(el('td', 'num', String(large)));
+      const td = el('td'), bar = el('div', 'bar'), i = el('i'); i.style.width = Math.round(mean * 220) + 'px'; bar.append(i, el('span', null, (mean * 100).toFixed(1) + '%')); td.appendChild(bar); tr.appendChild(td);
+      tr.append(el('td', 'num', (Math.min(...shares) * 100).toFixed(0) + '%'), el('td', 'num', (Math.max(...shares) * 100).toFixed(0) + '%')); body.appendChild(tr);
+    }
+    $('cmp-note').textContent = ''; run.disabled = false;
+    const best = results.reduce((a, b) => (b.mean > a.mean ? b : a)), worst = results.reduce((a, b) => (b.mean < a.mean ? b : a));
+    $('cmp-status').textContent = 'In this sample, ' + best.large + ' large ' + (best.large === 1 ? 'number' : 'numbers') + ' gave the highest average (' + (best.mean * 100).toFixed(1) + '%) and ' + worst.large + ' gave the lowest (' + (worst.mean * 100).toFixed(1) + '%). ' + DRAWS + ' random sets were dealt for each split. The worst and best columns show how much a single set can differ from the average.';
+  }
+
+  /* ---------- wiring ---------- */
+  function refresh() { analyse(); drawTiles(); solve(); drawSubsets(); drawLayers(); drawStrip(); overlap(); }
+  const seg = $('seg-large');
+  [0, 1, 2, 3, 4].forEach((k) => seg.insertAdjacentHTML('beforeend', '<input type="radio" name="large" id="large-' + k + '" value="' + k + '"' + (k === G.large ? ' checked' : '') + '><label for="large-' + k + '">' + k + '</label>'));
+  seg.addEventListener('change', (e) => { G.large = +e.target.value; newDraw(); });
+  $('draw').addEventListener('click', newDraw);
+  $('work-run').addEventListener('click', runWork);
+  $('cmp-run').addEventListener('click', runCompare);
+  refresh();
+})();
+</script>
+</body>
+</html>
