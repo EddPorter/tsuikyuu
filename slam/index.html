@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Where Am I</title>
+<meta name="description" content="An interactive explainer of SLAM, simultaneous localisation and mapping: a robot that does not know where it is, or where anything is, drifts when it only counts its own movements, and pulls itself and its map into shape by re-sighting landmarks.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout concept: one reading column that builds the idea in stages, ending in one big workbench: a map you can scrub through. */
+:root {
+  --bg: #eceff2; --surface: #fbfcfd; --cell: #f0f3f5; --ink: #16212b; --muted: #55646f; --line: #cdd5dc;
+  --accent: #2b2bd6; --accent-soft: #e3e3fb; --on-accent: #ffffff;
+  --c-true: #55646f; --c-est: #2b2bd6; --c-dr: #b3570c; --c-lm: #1d6f3d; --c-bad: #b3261e;
+  --code-bg: #15222c; --code-ink: #d8e2ea; --code-cm: #7f93a3; --code-kw: #8ec5ff;
+  --font-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+    --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+    --c-true: #93a3b1; --c-est: #9aa2ff; --c-dr: #f0a05a; --c-lm: #6fd78f; --c-bad: #ff8a80; --code-bg: #0b1117;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151e26; --cell: #1b2630; --ink: #e4ebf1; --muted: #93a3b1; --line: #2a3744;
+  --accent: #9aa2ff; --accent-soft: #23265a; --on-accent: #0e141a;
+  --c-true: #93a3b1; --c-est: #9aa2ff; --c-dr: #f0a05a; --c-lm: #6fd78f; --c-bad: #ff8a80; --code-bg: #0b1117;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.6;
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 72px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 72px; }
+section { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); font-weight: 700; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 700; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.2rem; color: var(--muted); max-width: 58ch; }
+.note { color: var(--muted); font-size: 0.95rem; }
+code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.crumb { font-size: 14px; }
+pre.code { margin: 0; background: var(--code-bg); color: var(--code-ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.65; padding: 14px 0; overflow-x: auto; border-radius: 6px; tab-size: 2; }
+pre.code .ln { display: block; padding: 0 16px; white-space: pre; }
+pre.code .cm { color: var(--code-cm); }
+pre.code .kw { color: var(--code-kw); }
+.fn { display: flex; flex-direction: column; gap: 6px; }
+.fn header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.fn .name { font-family: var(--font-mono); font-size: 13px; font-weight: 500; }
+details { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+details summary { cursor: pointer; padding: 8px 12px; font-size: 14px; }
+details > .stack { display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lab { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+input[type="range"] { accent-color: var(--accent); width: 100%; max-width: 280px; }
+.sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px 20px; }
+.btn { font: inherit; font-size: 14px; font-weight: 500; padding: 7px 14px; border-radius: 6px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn:hover { border-color: var(--muted); }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 18px; height: 18px; }
+.check input:disabled + span { opacity: 0.5; }
+.status { min-height: 3.2em; font-weight: 500; }
+.readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.readout div { display: flex; flex-direction: column; }
+.readout .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.readout .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+
+/* the map */
+svg.map { display: block; width: 100%; height: auto; background: var(--cell); border: 1px solid var(--line); border-radius: 6px; }
+svg.map text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+svg.map .grid { stroke: var(--line); stroke-width: 1; }
+svg.map .p-true { fill: none; stroke: var(--c-true); stroke-width: 5; opacity: 0.45; stroke-linejoin: round; }
+svg.map .p-dr { fill: none; stroke: var(--c-dr); stroke-width: 2.5; stroke-dasharray: 3 5; stroke-linejoin: round; }
+svg.map .p-est { fill: none; stroke: var(--c-est); stroke-width: 2.5; stroke-linejoin: round; }
+svg.map .lm-true { fill: none; stroke: var(--c-true); stroke-width: 2; }
+svg.map .lm-est { fill: var(--c-lm); stroke: var(--surface); stroke-width: 1.5; }
+svg.map .ell-lm { fill: var(--c-lm); fill-opacity: 0.16; stroke: var(--c-lm); stroke-width: 1.5; }
+svg.map .ell-robot { fill: var(--c-est); fill-opacity: 0.14; stroke: var(--c-est); stroke-width: 1.8; }
+svg.map .ell-dr { fill: none; stroke: var(--c-dr); stroke-width: 1.8; stroke-dasharray: 5 4; }
+svg.map .robot-est { fill: var(--c-est); stroke: var(--surface); stroke-width: 1.5; }
+svg.map .robot-true { fill: none; stroke: var(--c-true); stroke-width: 2.2; }
+svg.map .robot-dr { fill: none; stroke: var(--c-dr); stroke-width: 2; }
+svg.map .ray { stroke: var(--c-lm); stroke-width: 1.5; }
+svg.map .range { fill: none; stroke: var(--c-true); stroke-width: 1; stroke-dasharray: 2 4; opacity: 0.6; }
+svg.map .tag { fill: var(--c-lm); font-weight: 600; }
+svg.chart { display: block; width: 100%; height: auto; background: var(--cell); border: 1px solid var(--line); border-radius: 6px; }
+svg.chart text { font-family: var(--font-body); font-size: 12px; fill: var(--muted); }
+svg.chart .grid { stroke: var(--line); stroke-width: 1; }
+svg.chart .e-est { fill: none; stroke: var(--c-est); stroke-width: 2.5; }
+svg.chart .e-dr { fill: none; stroke: var(--c-dr); stroke-width: 2.5; stroke-dasharray: 3 5; }
+svg.chart .cursor { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.6; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { width: 30px; height: 12px; }
+dl.lines { display: grid; gap: 10px; margin: 0; max-width: 75ch; }
+dl.lines div { display: grid; grid-template-columns: minmax(0, 14em) minmax(0, 1fr); gap: 4px 16px; }
+dl.lines dt { font-family: var(--font-mono); font-size: 13px; color: var(--accent); }
+dl.lines dd { margin: 0; color: var(--muted); font-size: 0.95rem; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 15px; }
+th, td { text-align: left; padding: 8px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; }
+ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+@media (max-width: 920px) { dl.lines div { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:16px">
+    <p class="crumb"><a href="../">&larr; All explainers</a></p>
+    <h1>Where am I, and where is everything?</h1>
+    <p class="lead">Put a robot in an unknown place. To know where it is, it needs a map. To build a map, it needs to know where it is. SLAM, simultaneous localisation and mapping, solves both at once. This page builds on <a href="../kalman-filter/">How much to believe</a>: the same idea of weighing a prediction against a reading, with a robot and its landmarks estimated together.</p>
+  </header>
+
+  <section aria-labelledby="h-egg">
+    <h2 id="h-egg">The chicken and the egg</h2>
+    <p>Suppose a robot drives round a room. It has no GPS, only two kinds of information.</p>
+    <dl class="lines">
+      <div><dt>Odometry</dt><dd>Its own sense of how far it has moved and turned, from counting wheel rotations. Always a little wrong. Every wrong step is added to the next, so the error grows without limit. Working out a position by adding up movements is called <em>dead reckoning</em>.</dd></div>
+      <div><dt>Landmark sightings</dt><dd>A sensor that reports, for each landmark in view, how far away it is and in which direction relative to the robot's heading. Also a little wrong, but the error does <em>not</em> grow with time, because each sighting is a fresh measurement.</dd></div>
+    </dl>
+    <p>If the landmarks were at known positions, each sighting would pin the robot down: that is <em>localisation</em>. If the robot knew exactly where it was, each sighting would show where a landmark is: that is <em>mapping</em>. In SLAM neither is known, so the robot has to improve both from the same sightings.</p>
+  </section>
+
+  <section aria-labelledby="h-trick">
+    <h2 id="h-trick">One belief for everything</h2>
+    <p>The key step is to stop treating the robot and the landmarks as separate things. The filter keeps one long list of numbers: the robot's position and heading, followed by the position of every landmark found so far. It also keeps one uncertainty table for the whole list, as on the previous page, but now the table says how <em>every number is related to every other</em>.</p>
+    <p>Those relations matter. When the robot first sights a landmark, the landmark&rsquo;s position is worked out from the robot&rsquo;s position, so any error in one is shared by the other. The two beliefs are linked. Later, when the robot finds out it was wrong about where it was, the links let the filter fix the landmarks it placed earlier as well. Without the links, a correction to the robot could not reach them. You can switch the links off below and see what happens.</p>
+    <p>Each step has the same two parts as the Kalman filter:</p>
+    <dl class="lines">
+      <div><dt>Predict</dt><dd>The robot moves. Its position changes according to the odometry, and its uncertainty grows, since odometry is noisy. The landmarks have not moved, so their numbers stay put. The links to the robot stretch the uncertainty of anything linked to it, too.</dd></div>
+      <div><dt>Update</dt><dd>The robot sights a landmark. If it is new, add it to the list and link it to the robot. If it has been seen before, compare where the robot would expect to see it with where it did see it, and correct everything, weighted by the uncertainties.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-try">
+    <h2 id="h-try">Try it</h2>
+    <p>A robot drives a lap round a rectangle and carries on for a little over a second lap. Six landmarks stand around it. The workbench shows everything, including what the robot cannot know: the true positions in grey. Drag the step slider or press Play.</p>
+    <p>Begin with the box <em>Use landmark sightings</em> ticked off. The robot then has only odometry. Its path drifts, and the dashed orange ellipse, its uncertainty, grows. Then tick the box. Ellipses are drawn at about 95% confidence.</p>
+    <div class="panel">
+      <div class="sliders">
+        <label class="field"><span class="lab" id="lab-od">Odometry noise: <span id="v-od"></span>&times;</span><input type="range" id="od" min="0" max="3" step="0.25" aria-labelledby="lab-od"></label>
+        <label class="field"><span class="lab" id="lab-sn">Sensor noise: <span id="v-sn"></span>&times;</span><input type="range" id="sn" min="0.5" max="3" step="0.25" aria-labelledby="lab-sn"></label>
+        <label class="field"><span class="lab" id="lab-rg">Sensor range: <span id="v-rg"></span></span><input type="range" id="rg" min="12" max="45" step="1" aria-labelledby="lab-rg"></label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="use"><span>Use landmark sightings</span></label>
+        <label class="check"><input type="checkbox" id="decouple"><span>Forget the links between the robot and landmarks</span></label>
+        <label class="check"><input type="checkbox" id="truth" checked><span>Show the truth</span></label>
+        <button class="btn" type="button" id="new">New noise</button>
+      </div>
+      <div class="row">
+        <button class="btn" type="button" id="play">Play</button>
+        <label class="field" style="flex:1;min-width:220px"><span class="lab" id="lab-t">Step: <span id="v-t"></span> of <span id="v-n"></span></span><input type="range" id="t" min="0" max="80" step="1" style="max-width:none" aria-labelledby="lab-t"></label>
+      </div>
+      <svg class="map" id="map" viewBox="0 0 800 600" role="img" aria-label="A map showing the robot's true path, its estimated path, the landmarks and the uncertainty ellipses"></svg>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="0 0 30 12"><line x1="0" y1="6" x2="30" y2="6" style="stroke:var(--c-true);stroke-width:5;opacity:.45"/></svg>True path (hidden)</span>
+        <span><svg viewBox="0 0 30 12"><line x1="0" y1="6" x2="30" y2="6" style="stroke:var(--c-est);stroke-width:2.5"/></svg>Robot's belief</span>
+        <span><svg viewBox="0 0 30 12"><line x1="0" y1="6" x2="30" y2="6" style="stroke:var(--c-dr);stroke-width:2.5;stroke-dasharray:3 5"/></svg>Odometry alone</span>
+        <span><svg viewBox="0 0 30 12"><rect x="9" y="1" width="10" height="10" style="fill:none;stroke:var(--c-true);stroke-width:2"/></svg>True landmark</span>
+        <span><svg viewBox="0 0 30 12"><polygon points="14,0 22,6 14,12 6,6" style="fill:var(--c-lm)"/></svg>Mapped landmark</span>
+      </div>
+      <div class="readout">
+        <div><span class="k">Robot position error</span><span class="v" id="r-err">0</span></div>
+        <div><span class="k">Odometry-alone error</span><span class="v" id="r-dr">0</span></div>
+        <div><span class="k">Robot uncertainty (radius)</span><span class="v" id="r-unc">0</span></div>
+        <div><span class="k">Landmarks mapped</span><span class="v" id="r-lm">0</span></div>
+        <div><span class="k">Mean landmark error</span><span class="v" id="r-lmerr">0</span></div>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <svg class="chart" id="errchart" viewBox="0 0 800 170" role="img" aria-label="Position error over time, for the robot's belief and for odometry alone"></svg>
+      <div class="legend" aria-hidden="true">
+        <span><svg viewBox="0 0 30 12"><line x1="0" y1="6" x2="30" y2="6" style="stroke:var(--c-est);stroke-width:2.5"/></svg>Error of the robot's belief</span>
+        <span><svg viewBox="0 0 30 12"><line x1="0" y1="6" x2="30" y2="6" style="stroke:var(--c-dr);stroke-width:2.5;stroke-dasharray:3 5"/></svg>Error with odometry alone</span>
+      </div>
+    </div>
+    <p>Things to try:</p>
+    <ul class="recap">
+      <li>With sightings on, watch the robot&rsquo;s uncertainty ellipse when it first returns to a landmark it saw long before. It usually shrinks sharply, and the status line says so. This is <em>loop closure</em>, the moment SLAM is built around.</li>
+      <li>At the same moment, look at the landmark ellipses and the mean landmark error. Landmarks seen early on get corrected too. That is the work of the links.</li>
+      <li>Tick &ldquo;Forget the links&rdquo;. The ellipses shrink to a fraction of their size, but the errors do not, so the filter now claims far more certainty than it has earned. It is usually less accurate as well, though not on every noise pattern. Try New noise a few times. The filter has stopped admitting how much its beliefs depend on each other.</li>
+      <li>Shorten the sensor range so that the robot loses sight of landmarks for long stretches.</li>
+    </ul>
+    <details>
+      <summary>The code (it is what this page runs)</summary>
+      <div class="stack" id="code-slam"></div>
+    </details>
+    <p class="note">The code uses small hand-written matrix helpers, which are not shown. They are written for clarity and not for speed.</p>
+  </section>
+
+  <section aria-labelledby="h-math">
+    <h2 id="h-math">What the filter is doing</h2>
+    <dl class="lines">
+      <div><dt>The state</dt><dd>Robot position (two numbers) and heading, then two numbers for each landmark found so far. With <var>L</var> landmarks that is 3 + 2<var>L</var> numbers.</dd></div>
+      <div><dt>The uncertainty table</dt><dd>A square table with that many rows and columns. Its diagonal holds each number&rsquo;s own variance, and the other entries hold how pairs of numbers vary together.</dd></div>
+      <div><dt>Predict</dt><dd>Move the robot by the odometry. Work out how the new pose depends on the old pose and on the odometry noise, and use that to grow the table, as in the Kalman filter, but in several dimensions.</dd></div>
+      <div><dt>A new landmark</dt><dd>Place it at the sensed distance and direction from the robot. Its uncertainty comes from the robot&rsquo;s uncertainty plus the sensor&rsquo;s. Add a row and column that link it to everything the robot is linked to.</dd></div>
+      <div><dt>A known landmark</dt><dd>Compute where the sensor <em>should</em> report it, from the current belief. The gap between that and the real reading is the innovation. The gain, as before, depends on how uncertain the belief is compared with the sensor, and now it also spreads the correction over every number the sighting is linked to.</dd></div>
+    </dl>
+    <p>The movement and the sensor both involve angles and distances, which are not straight-line relationships. The filter handles this by treating them as straight lines over a small region, using their slopes at the current estimate. That version is called the <strong>extended Kalman filter</strong>, and it is what this page uses.</p>
+  </section>
+
+  <section aria-labelledby="h-limits">
+    <h2 id="h-limits">What this page leaves out</h2>
+    <ul class="recap">
+      <li><strong>It knows which landmark is which.</strong> Here every sighting arrives labelled. A real robot has to decide whether a blob it sees is a landmark it has seen before or a new one, and a wrong decision can ruin the map. This is called <em>data association</em>.</li>
+      <li><strong>It starts at a known place.</strong> The robot&rsquo;s starting position defines the map&rsquo;s origin. The map is relative to it.</li>
+      <li><strong>It does not scale.</strong> The uncertainty table has a row and column for every number, so it grows with the square of the number of landmarks, and each update touches all of it. Large maps need other methods.</li>
+      <li><strong>It can be confidently wrong.</strong> The straight-line approximation of the angles is only good while the heading error is small. With little to see, such as a sensor range of 16 on the first noise pattern, the filter can end up several units out while its ellipse says it is within three or four. Real systems check for this, and use other methods when it matters.</li>
+      <li><strong>The noise levels are assumed.</strong> As on the previous page, the filter is told the true noise levels. Wrong ones give overconfident or sluggish behaviour.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="h-next">
+    <h2 id="h-next">Where to go next</h2>
+    <p>Names to search for. They are pointers, not explanations.</p>
+    <dl class="lines">
+      <div><dt>Particle-filter SLAM</dt><dd>Hold many guesses of the robot&rsquo;s path at once, each with its own map, instead of one bell curve. The idea behind a family of methods usually called FastSLAM.</dd></div>
+      <div><dt>Graph-based SLAM</dt><dd>Keep a list of poses and the constraints between them, such as &ldquo;these two poses saw the same landmark&rdquo;, and find the layout that disturbs the constraints least. It is widely used for large maps.</dd></div>
+      <div><dt>Loop-closure detection</dt><dd>Recognising a place already visited, from its appearance, without relying on the robot&rsquo;s estimate of where it is.</dd></div>
+      <div><dt>Scan matching</dt><dd>Using the overlap between successive laser or depth scans to estimate movement, in place of wheel counting.</dd></div>
+      <div><dt>The previous page</dt><dd><a href="../kalman-filter/">How much to believe</a> has the one-dimensional version of the predict and update steps used here.</dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-recap">
+    <h2 id="h-recap">In short</h2>
+    <ul class="recap">
+      <li>Odometry alone drifts without limit, and a map needs to know where the robot is.</li>
+      <li>SLAM keeps one belief about the robot and every landmark, with one table of how they all vary together.</li>
+      <li>Each step predicts with the odometry, which grows the uncertainty, and updates with sightings, which shrinks it.</li>
+      <li>The links between robot and landmarks let a late correction fix the earlier map. Dropping them makes the filter overconfident.</li>
+      <li>Re-sighting a landmark seen long before, loop closure, is where the uncertainty falls most.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); Object.entries(attrs || {}).forEach(([k, v]) => e.setAttribute(k, v)); if (text != null) e.textContent = text; return e; };
+
+  /* ---------- small matrix helpers (not part of the idea) ---------- */
+  const zeros = (r, c) => Array.from({ length: r }, () => new Array(c).fill(0));
+  const identity = (n) => { const I = zeros(n, n); for (let i = 0; i < n; i++) I[i][i] = 1; return I; };
+  const T = (A) => A[0].map((_, j) => A.map((row) => row[j]));
+  const mul = (A, B) => A.map((row) => B[0].map((_, j) => row.reduce((s, a, k) => s + a * B[k][j], 0)));
+  const add = (A, B) => A.map((row, i) => row.map((v, j) => v + B[i][j]));
+  const sub = (A, B) => A.map((row, i) => row.map((v, j) => v - B[i][j]));
+  const inv2 = (M) => { const d = M[0][0] * M[1][1] - M[0][1] * M[1][0]; return [[M[1][1] / d, -M[0][1] / d], [-M[1][0] / d, M[0][0] / d]]; };
+  const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+  /* ---------- the filter (displayed and run as written) ---------- */
+  const predictSlam = (s, u, Q) => {
+    // move the robot by the odometry u = { dist, turn }; the landmarks stay where they are
+    const n = s.x.length, [x, y, th] = s.x, th2 = th + u.turn;
+    const x2 = [x + u.dist * Math.cos(th2), y + u.dist * Math.sin(th2), th2, ...s.x.slice(3)];
+    const F = identity(n);                               // how the new pose depends on the old pose
+    F[0][2] = -u.dist * Math.sin(th2); F[1][2] = u.dist * Math.cos(th2);
+    const G = zeros(n, 2);                               // and on the two odometry numbers
+    G[0][0] = Math.cos(th2); G[0][1] = -u.dist * Math.sin(th2);
+    G[1][0] = Math.sin(th2); G[1][1] = u.dist * Math.cos(th2);
+    G[2][1] = 1;
+    return { x: x2, P: add(mul(mul(F, s.P), T(F)), mul(mul(G, Q), T(G))), ids: s.ids };
+  };
+
+  const addLandmark = (s, id, z, R) => {
+    // a landmark seen for the first time: place it from the robot's pose and the reading
+    const n = s.x.length, [x, y, th] = s.x, [r, b] = z, a = th + b;
+    const Jr = [[1, 0, -r * Math.sin(a)], [0, 1, r * Math.cos(a)]];               // how it depends on the robot
+    const Jz = [[Math.cos(a), -r * Math.sin(a)], [Math.sin(a), r * Math.cos(a)]]; // and on the reading
+    const P = zeros(n + 2, n + 2);
+    s.P.forEach((row, i) => row.forEach((v, j) => { P[i][j] = v; }));
+    const link = mul(Jr, s.P.slice(0, 3));                                        // linked to everything the robot is linked to
+    link.forEach((row, i) => row.forEach((v, j) => { P[n + i][j] = v; P[j][n + i] = v; }));
+    const own = add(mul(mul(Jr, s.P.slice(0, 3).map((row) => row.slice(0, 3))), T(Jr)), mul(mul(Jz, R), T(Jz)));
+    own.forEach((row, i) => row.forEach((v, j) => { P[n + i][n + j] = v; }));
+    return { x: [...s.x, x + r * Math.cos(a), y + r * Math.sin(a)], P, ids: [...s.ids, id] };
+  };
+
+  const updateSlam = (s, k, z, R) => {
+    // a landmark seen again: compare what the belief expects with what the sensor says
+    const n = s.x.length, i = 3 + 2 * k;
+    const dx = s.x[i] - s.x[0], dy = s.x[i + 1] - s.x[1], q = dx * dx + dy * dy, r = Math.sqrt(q);
+    const expected = [r, wrap(Math.atan2(dy, dx) - s.x[2])];
+    const H = zeros(2, n);                               // how the reading depends on every number
+    H[0][0] = -dx / r; H[0][1] = -dy / r; H[1][0] = dy / q; H[1][1] = -dx / q; H[1][2] = -1;
+    H[0][i] = dx / r; H[0][i + 1] = dy / r; H[1][i] = -dy / q; H[1][i + 1] = dx / q;
+    const K = mul(mul(s.P, T(H)), inv2(add(mul(mul(H, s.P), T(H)), R)));   // the gain, now spread over everything
+    const gap = [z[0] - expected[0], wrap(z[1] - expected[1])];
+    const x = s.x.map((v, m) => v + K[m][0] * gap[0] + K[m][1] * gap[1]);
+    x[2] = wrap(x[2]);
+    const P = mul(sub(identity(n), mul(K, H)), s.P);
+    return { x, P: P.map((row, a) => row.map((v, b) => (v + P[b][a]) / 2)), ids: s.ids };
+  };
+
+  /* ---------- the world ---------- */
+  const LANDMARKS = [[28, 38], [50, 27], [72, 38], [85, 50], [52, 56], [24, 64]];
+  const START = { x: 20, y: 20, th: 0 };
+  function buildRoute() {
+    const cmds = [], seg = (len) => { for (let i = 0; i < len / 4; i++) cmds.push({ dist: 4, turn: 0 }); };
+    const corner = () => cmds.push({ dist: 0, turn: Math.PI / 2 });
+    seg(60); corner(); seg(40); corner(); seg(60); corner(); seg(40); corner();   // one lap
+    seg(60); corner(); seg(40);                                                     // and most of another
+    return cmds;
+  }
+  const ROUTE = buildRoute(), NSTEP = ROUTE.length;
+  const sigmaDist = (d, k) => k * (0.04 * Math.abs(d) + 0.01), sigmaTurn = (t, k) => k * (0.01 + 0.03 * Math.abs(t));
+  const SR = 0.8, SB = 0.02;                              // sensor noise at 1x: distance and bearing (radians)
+  function mulberry32(a) { return () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const normal = (rand) => Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
+
+  const decouple = (s) => {
+    // the mistake: pretend the robot and each landmark are unrelated
+    const group = (i) => (i < 3 ? 0 : 1 + Math.floor((i - 3) / 2));
+    return { ...s, P: s.P.map((row, a) => row.map((v, b) => (group(a) === group(b) ? v : 0))) };
+  };
+
+  const S = { od: 1, sn: 1, rg: 18, use: false, dec: false, truth: true, t: NSTEP, seed: 3, playing: false };
+  let RUN = null;
+
+  function simulate() {
+    const rand = mulberry32(S.seed), snaps = [];
+    // the truth and the readings
+    let tp = { ...START }; const truePath = [{ ...tp }], odo = [], reads = [];
+    ROUTE.forEach((c) => {
+      const d = c.dist + sigmaDist(c.dist, S.od) * normal(rand), tn = c.turn + sigmaTurn(c.turn, S.od) * normal(rand);
+      odo.push(c);                                       // what the robot believes it did
+      const th = tp.th + tn; tp = { x: tp.x + d * Math.cos(th), y: tp.y + d * Math.sin(th), th };
+      truePath.push({ ...tp });
+      const seen = [];
+      LANDMARKS.forEach(([lx, ly], id) => {
+        const dx = lx - tp.x, dy = ly - tp.y, dist = Math.hypot(dx, dy);
+        if (dist <= S.rg) seen.push({ id, z: [dist + SR * S.sn * normal(rand), wrap(Math.atan2(dy, dx) - tp.th + SB * S.sn * normal(rand))] });
+      });
+      reads.push(seen);
+    });
+    const R = [[(SR * S.sn) ** 2, 0], [0, (SB * S.sn) ** 2]];
+    const start = { x: [START.x, START.y, START.th], P: zeros(3, 3).map((r, i) => r.map((_, j) => (i === j ? 1e-6 : 0))), ids: [] };
+    let s = start, dr = start; const lastSeen = {};
+    snaps.push({ s, dr, events: [], seen: [] });
+    ROUTE.forEach((c, step) => {
+      const Q = [[sigmaDist(c.dist, S.od) ** 2 + 1e-9, 0], [0, sigmaTurn(c.turn, S.od) ** 2 + 1e-9]];
+      s = predictSlam(s, c, Q); dr = predictSlam(dr, c, Q);
+      const before = radius(s.P), events = [], seen = [];
+      if (S.dec) s = decouple(s);
+      if (S.use) reads[step].forEach(({ id, z }) => {
+        const k = s.ids.indexOf(id);
+        if (k < 0) { s = addLandmark(s, id, z, R); events.push({ type: 'new', id }); }
+        else { s = updateSlam(s, k, z, R); events.push({ type: 'again', id, gap: step - (lastSeen[id] ?? step) }); }
+        lastSeen[id] = step; seen.push(id);
+        if (S.dec) s = decouple(s);
+      });
+      snaps.push({ s, dr, events, seen, before, after: radius(s.P) });
+    });
+    return { snaps, truePath, reads };
+  }
+
+  /* ---------- drawing ---------- */
+  const SC = 8, X = (x) => x * SC, Y = (y) => 600 - y * SC - 40;
+  const radius = (P) => Math.sqrt(ellipse(P, 0, 0).a);   // semi-major axis of the robot's 95% ellipse
+  function ellipse(P, i, j) {
+    const a = P[i][i], b = P[i][i + 1] ?? 0, c = P[i + 1] ? P[i + 1][i + 1] : 0;
+    const tr = a + c, det = a * c - b * b, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+    const l1 = tr / 2 + disc, l2 = Math.max(0, tr / 2 - disc), k = 2.4477;     // about 95% for two numbers
+    return { a: l1 * k * k, b: l2 * k * k, angle: 0.5 * Math.atan2(2 * b, a - c) };
+  }
+  const drawEllipse = (g, cx, cy, e, cls) => {
+    const rx = Math.sqrt(e.a) * SC, ry = Math.sqrt(e.b) * SC;
+    g.appendChild(mk('ellipse', { cx: X(cx), cy: Y(cy), rx: Math.max(rx, 1.5), ry: Math.max(ry, 1.5), class: cls, transform: 'rotate(' + (-e.angle * 180 / Math.PI) + ' ' + X(cx) + ' ' + Y(cy) + ')' }));
+  };
+  const tri = (cx, cy, th, size) => [[size, 0], [-size * 0.7, size * 0.65], [-size * 0.7, -size * 0.65]].map(([u, v]) => (X(cx) + (u * Math.cos(th) - v * Math.sin(th))).toFixed(1) + ',' + (Y(cy) - (u * Math.sin(th) + v * Math.cos(th))).toFixed(1)).join(' ');
+  const f1 = (v) => v.toFixed(1);
+
+  function draw() {
+    if (!RUN) RUN = simulate();
+    const { snaps, truePath } = RUN, t = S.t, snap = snaps[t];
+    const svg = $('map'); svg.textContent = '';
+    for (let v = 0; v <= 100; v += 10) { svg.appendChild(mk('line', { x1: X(v), x2: X(v), y1: Y(0), y2: Y(70), class: 'grid' })); }
+    for (let v = 0; v <= 70; v += 10) { svg.appendChild(mk('line', { x1: X(0), x2: X(100), y1: Y(v), y2: Y(v), class: 'grid' })); }
+    const line = (pts) => pts.map((p) => X(p.x).toFixed(1) + ',' + Y(p.y).toFixed(1)).join(' ');
+    const tp = truePath[t], est = { x: snap.s.x[0], y: snap.s.x[1], th: snap.s.x[2] };
+    if (S.truth) {
+      svg.appendChild(mk('polyline', { class: 'p-true', points: line(truePath.slice(0, t + 1)) }));
+      svg.appendChild(mk('circle', { cx: X(tp.x), cy: Y(tp.y), r: S.rg * SC, class: 'range' }));
+      LANDMARKS.forEach(([lx, ly]) => svg.appendChild(mk('rect', { x: X(lx) - 6, y: Y(ly) - 6, width: 12, height: 12, class: 'lm-true' })));
+    }
+    svg.appendChild(mk('polyline', { class: 'p-dr', points: line(snaps.slice(0, t + 1).map((q) => ({ x: q.dr.x[0], y: q.dr.x[1] }))) }));
+    svg.appendChild(mk('polyline', { class: 'p-est', points: line(snaps.slice(0, t + 1).map((q) => ({ x: q.s.x[0], y: q.s.x[1] }))) }));
+    // odometry-alone ellipse and robot
+    const drs = snap.dr; drawEllipse(svg, drs.x[0], drs.x[1], ellipse(drs.P, 0, 0), 'ell-dr');
+    svg.appendChild(mk('polygon', { points: tri(drs.x[0], drs.x[1], drs.x[2], 9), class: 'robot-dr' }));
+    // landmark estimates
+    snap.s.ids.forEach((id, k) => {
+      const i = 3 + 2 * k, lx = snap.s.x[i], ly = snap.s.x[i + 1];
+      drawEllipse(svg, lx, ly, ellipse(snap.s.P, i, i), 'ell-lm');
+      svg.appendChild(mk('polygon', { points: [[0, -8], [8, 0], [0, 8], [-8, 0]].map(([u, v]) => (X(lx) + u) + ',' + (Y(ly) + v)).join(' '), class: 'lm-est' }));
+      svg.appendChild(mk('text', { x: X(lx) + 11, y: Y(ly) - 9, class: 'tag' }, 'L' + (id + 1)));
+      if (snap.seen.includes(id)) svg.appendChild(mk('line', { x1: X(est.x), y1: Y(est.y), x2: X(lx), y2: Y(ly), class: 'ray' }));
+    });
+    if (S.truth) svg.appendChild(mk('polygon', { points: tri(tp.x, tp.y, tp.th, 11), class: 'robot-true' }));
+    drawEllipse(svg, est.x, est.y, ellipse(snap.s.P, 0, 0), 'ell-robot');
+    svg.appendChild(mk('polygon', { points: tri(est.x, est.y, est.th, 10), class: 'robot-est' }));
+    // readouts
+    const err = Math.hypot(est.x - tp.x, est.y - tp.y), drErr = Math.hypot(drs.x[0] - tp.x, drs.x[1] - tp.y);
+    $('r-err').textContent = f1(err); $('r-dr').textContent = f1(drErr); $('r-unc').textContent = f1(Math.sqrt(ellipse(snap.s.P, 0, 0).a));
+    $('r-lm').textContent = snap.s.ids.length + ' of ' + LANDMARKS.length;
+    const lmErrs = snap.s.ids.map((id, k) => Math.hypot(snap.s.x[3 + 2 * k] - LANDMARKS[id][0], snap.s.x[4 + 2 * k] - LANDMARKS[id][1]));
+    $('r-lmerr').textContent = lmErrs.length ? f1(lmErrs.reduce((a, b) => a + b, 0) / lmErrs.length) : '–';
+    $('v-t').textContent = t; $('v-n').textContent = NSTEP; $('t').value = t;
+    // status
+    const ev = snap.events, big = ev.filter((e) => e.type === 'again' && e.gap > 15);
+    let msg = t === 0 ? 'The robot is at its starting point, which defines the origin of the map.' : 'Step ' + t + '. ';
+    if (t > 0) {
+      if (!S.use) msg += 'Odometry only. The robot cannot see its mistakes, so its uncertainty only grows: it now thinks it is within ' + f1(Math.sqrt(ellipse(snap.s.P, 0, 0).a)) + ' of its estimate, and is actually ' + f1(err) + ' off.';
+      else if (big.length) msg += 'Loop closure: it sights ' + big.map((e) => 'L' + (e.id + 1)).join(' and ') + ' again after ' + Math.max(...big.map((e) => e.gap)) + ' steps. Its uncertainty radius drops from ' + f1(snap.before) + ' to ' + f1(snap.after) + '.';
+      else if (ev.some((e) => e.type === 'new')) msg += 'It sights ' + ev.filter((e) => e.type === 'new').map((e) => 'L' + (e.id + 1)).join(' and ') + ' for the first time and adds ' + (ev.filter((e) => e.type === 'new').length > 1 ? 'them' : 'it') + ' to the map.';
+      else if (ev.length) msg += 'It sees ' + ev.map((e) => 'L' + (e.id + 1)).join(', ') + ' and corrects itself a little. Its uncertainty radius is ' + f1(snap.after) + '.';
+      else msg += 'No landmark in range, so only the odometry updates it. Its uncertainty grows.';
+    }
+    $('status').textContent = msg;
+    drawChart(snaps, truePath, t);
+    $('decouple').disabled = !S.use;
+  }
+  function drawChart(snaps, truePath, t) {
+    const svg = $('errchart'); svg.textContent = '';
+    const W = 800, H = 170, L = 38, R = 14, Tp = 10, B = 24;
+    const est = snaps.map((q, i) => Math.hypot(q.s.x[0] - truePath[i].x, q.s.x[1] - truePath[i].y)), dr = snaps.map((q, i) => Math.hypot(q.dr.x[0] - truePath[i].x, q.dr.x[1] - truePath[i].y));
+    const top = Math.max(5, Math.ceil(Math.max(...est, ...dr) / 5) * 5), Xs = (i) => L + (i / NSTEP) * (W - L - R), Ys = (v) => H - B - (v / top) * (H - B - Tp);
+    for (let v = 0; v <= top; v += top / 4) { svg.appendChild(mk('line', { x1: L, x2: W - R, y1: Ys(v), y2: Ys(v), class: 'grid' })); svg.appendChild(mk('text', { x: L - 6, y: Ys(v) + 4, 'text-anchor': 'end' }, String(Math.round(v)))); }
+    [0, 20, 40, 60, NSTEP].forEach((i) => svg.appendChild(mk('text', { x: Xs(i), y: H - 6, 'text-anchor': 'middle' }, String(i))));
+    const poly = (a) => a.map((v, i) => Xs(i).toFixed(1) + ',' + Ys(v).toFixed(1)).join(' ');
+    svg.appendChild(mk('polyline', { class: 'e-dr', points: poly(dr) })); svg.appendChild(mk('polyline', { class: 'e-est', points: poly(est) }));
+    svg.appendChild(mk('line', { x1: Xs(t), x2: Xs(t), y1: Tp, y2: H - B, class: 'cursor' }));
+  }
+
+  /* ---------- code panels ---------- */
+  function dedent(src) {
+    const lines = src.split('\n');
+    if (lines.length < 2) return src;
+    const rest = lines.slice(1).filter((l) => l.trim());
+    const indent = rest.length ? Math.min(...rest.map((l) => l.match(/^ */)[0].length)) : 0;
+    return [lines[0], ...lines.slice(1).map((l) => l.slice(indent))].join('\n');
+  }
+  const KW = /\b(function|const|let|return|for|of|if|else|new|null|true|false|while)\b/g;
+  function codeBlock(src) {
+    const pre = el('pre', 'code');
+    pre.innerHTML = src.split('\n').map((line) => {
+      const i = line.indexOf('//');
+      const code = i >= 0 ? line.slice(0, i) : line, cm = i >= 0 ? line.slice(i) : '';
+      return '<span class="ln">' + ((esc(code).replace(KW, '<span class="kw">$1</span>') + (cm ? '<span class="cm">' + esc(cm) + '</span>' : '')) || ' ') + '</span>';
+    }).join('');
+    return pre;
+  }
+  [['predictSlam', predictSlam, 'the robot moves'], ['addLandmark', addLandmark, 'a landmark seen for the first time'], ['updateSlam', updateSlam, 'a landmark seen again']].forEach(([name, fn, tag]) => {
+    const d = el('div', 'fn');
+    d.innerHTML = '<header><span class="name">' + esc(name) + '</span><span class="note">' + esc(tag) + '</span></header>';
+    d.appendChild(codeBlock('const ' + name + ' = ' + dedent(fn.toString())));
+    $('code-slam').appendChild(d);
+  });
+
+  /* ---------- wiring ---------- */
+  const redo = () => { RUN = null; draw(); };
+  $('t').max = NSTEP;
+  [['od', 'od'], ['sn', 'sn'], ['rg', 'rg']].forEach(([id, k]) => {
+    $(id).value = S[k]; $('v-' + id).textContent = S[k];
+    $(id).addEventListener('input', () => { S[k] = +$(id).value; $('v-' + id).textContent = S[k]; redo(); });
+  });
+  $('use').addEventListener('change', () => { S.use = $('use').checked; if (!S.use) { S.dec = false; $('decouple').checked = false; } redo(); });
+  $('decouple').addEventListener('change', () => { S.dec = $('decouple').checked; redo(); });
+  $('truth').addEventListener('change', () => { S.truth = $('truth').checked; draw(); });
+  $('new').addEventListener('click', () => { S.seed += 7; redo(); });
+  $('t').addEventListener('input', () => { S.t = +$('t').value; stop(); draw(); });
+  let timer = 0;
+  function stop() { clearInterval(timer); timer = 0; $('play').textContent = 'Play'; }
+  $('play').addEventListener('click', () => {
+    if (timer) { stop(); return; }
+    if (S.t >= NSTEP) S.t = 0;
+    $('play').textContent = 'Pause';
+    timer = setInterval(() => { if (S.t >= NSTEP) { stop(); return; } S.t++; draw(); }, 140);
+  });
+  draw();
+})();
+</script>
+</body>
+</html>
