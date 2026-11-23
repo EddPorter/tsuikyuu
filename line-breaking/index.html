@@ -139,6 +139,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
         <div class="field"><span class="lab" id="lab-show">Show lines as</span><div class="seg" role="radiogroup" aria-labelledby="lab-show" id="seg-show"></div></div>
         <div class="field"><span class="lab" id="lab-pow">Cost of a line</span><div class="seg" role="radiogroup" aria-labelledby="lab-pow" id="seg-pow"></div></div>
       </div>
+      <div class="row"><button class="btn" type="button" id="jump">Find a width where squared and cubed disagree</button><span class="note" id="jump-status" role="status" aria-live="polite"></span></div>
       <div class="legend" aria-hidden="true"><span class="l-tight">snug line (slack 0 to 2)</span><span class="l-loose">loose line (slack more than 6)</span></div>
       <div class="two">
         <div class="col"><h3>Greedy</h3><div class="page" id="pg-g" aria-label="Paragraph set greedily"></div><div class="readout" id="ro-g"></div></div>
@@ -183,7 +184,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
       <table style="min-width:520px">
         <thead><tr><th>Part</th><th>Options</th><th>What changes</th></tr></thead>
         <tbody>
-          <tr><td>The cost of a line</td><td>Slack, squared, cubed</td><td>How much one bad line is worth against several mild ones. Try all three above.</td></tr>
+          <tr><td>The cost of a line</td><td>Slack, squared, cubed</td><td>How much one bad line is worth against several mild ones. Plain slack against squared changes the breaks at many widths. Squared against cubed changes them only at a few, and the button above the lines finds one.</td></tr>
           <tr><td>The last line</td><td>Free, or costed like the others</td><td>Whether a short final line is acceptable.</td></tr>
           <tr><td>The measure</td><td>Characters, or true widths of letters</td><td>How accurate the fit is.</td></tr>
           <tr><td>The way of choosing</td><td>Greedy, or the best total</td><td>Greedy is simple and fast but short-sighted. The best total costs a little more work and never does worse on this measure.</td></tr>
@@ -360,6 +361,17 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
   seg('seg-show', 'show', SHOW, show, (v) => { show = v; draw(); });
   seg('seg-pow', 'pow', POWERS, power, (v) => { power = +v; draw(); });
   $('width').addEventListener('input', () => { W = +$('width').value; draw(); });
+  $('jump').addEventListener('click', () => {
+    // look through the widths on the slider for one where squared and cubed choose different breaks
+    const lo = +$('width').min, hi = +$('width').max, found = [];
+    for (let w = lo; w <= hi; w++) if (JSON.stringify(optimalBreaks(words, w, 2).lines) !== JSON.stringify(optimalBreaks(words, w, 3).lines)) found.push(w);
+    if (!found.length) { $('jump-status').textContent = 'For this paragraph, squared and cubed choose the same breaks at every width from ' + lo + ' to ' + hi + '. Plain slack against squared does differ at many widths.'; return; }
+    W = found.find((w) => w > W) ?? found[0]; $('width').value = W;
+    const loosest = (lines, w) => { const sl = lines.slice(0, -1).map(([i, j]) => Math.max(0, w - widthOf(words, i, j))); const m = Math.max(...sl); return 'line ' + (sl.indexOf(m) + 1) + ', looseness ' + m; };
+    const a = optimalBreaks(words, W, 2).lines, c = optimalBreaks(words, W, 3).lines;
+    draw();
+    $('jump-status').textContent = 'At width ' + W + ' they differ (squared and cubed agree at ' + (hi - lo + 1 - found.length) + ' of the ' + (hi - lo + 1) + ' widths here). Switch between them above and watch the lines move. Squared\u2019s loosest line is ' + loosest(a, W) + '; cubed\u2019s is ' + loosest(c, W) + '.';
+  });
   $('para').addEventListener('input', draw);
   $('jpos').addEventListener('input', draw);
   $('para').value = 'The committee met on Tuesday to discuss the new library hours, the plan for the garden, and several small repairs that had been waiting since the spring. Nobody objected to the earlier opening time, though a few members worried about the cost of heating the reading room on cold mornings.';
