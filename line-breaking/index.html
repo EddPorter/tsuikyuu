@@ -125,7 +125,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
 
   <section aria-labelledby="h-score">
     <h2 id="h-score">Scoring a line</h2>
-    <p>To compare two ways of setting a paragraph we need a number for each. This page uses a simple one. Each line has a width, measured in characters, and the words plus single spaces take up some of it. The unused remainder is the line&rsquo;s <strong>slack</strong>. In a justified paragraph that slack has to be spread across the gaps between words, so a line with a lot of slack looks loose and gappy. The <strong>cost</strong> of a line is its slack raised to a power. A power above one makes one very loose line cost much more than several slightly loose ones, which is usually what you want. The last line of a paragraph is allowed to be short, so it costs nothing.</p>
+    <p>To compare two ways of setting a paragraph we need a number for each. This page uses a simple one. Each line has a width, measured in characters, and the words plus single spaces take up some of it. The unused remainder is the line&rsquo;s <strong>slack</strong>, which is also its looseness score. In a justified paragraph that slack has to be spread across the gaps between words, so a line with a lot of slack looks loose and gappy. The <strong>cost</strong> of a line is its slack raised to a power. A power above one makes one very loose line cost much more than several slightly loose ones, which is usually what you want. The last line of a paragraph is allowed to be short, so it costs nothing.</p>
     <p>The best setting is the one with the smallest total cost over all the lines. Greedy does not look at the total at all.</p>
   </section>
 
@@ -315,7 +315,7 @@ ul.recap { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 7
   function readout(id, lines) {
     const slacks = lines.slice(0, -1).map(([i, j]) => slackOf(i, j));
     const worst = slacks.length ? Math.max(...slacks) : null;   // the last line is allowed to be short, so it is not counted
-    const rows = [['Lines', lines.length], ['Total cost', costOf(lines)], ['Spare characters on the loosest line', worst === null ? '\u2013' : worst + ' (line ' + (slacks.indexOf(worst) + 1) + ')']];
+    const rows = [['Lines', lines.length], ['Total cost', costOf(lines)], ['Loosest line', worst === null ? '\u2013' : 'line ' + (slacks.indexOf(worst) + 1) + ', looseness ' + worst]];
     $(id).textContent = '';
     rows.forEach(([k, v]) => { const d = el('div'); d.append(el('span', 'k', k), el('span', 'v', String(v))); $(id).appendChild(d); });
   }
